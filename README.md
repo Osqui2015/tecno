@@ -1,59 +1,100 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Tecno-Rexs — Plataforma E-commerce & Distribuidor
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Este es un sistema e-commerce premium diseñado para la venta y distribución de productos tecnológicos. Cuenta con un panel administrativo avanzado que automatiza la sincronización de catálogos mediante scraping de múltiples importadores y distribuidores de tecnología de Argentina.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🔍 ¿De qué se trata el proyecto?
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+El sitio web funciona como un catálogo interactivo de cara al comprador y un gestor de inventario automatizado de cara al administrador:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. **Catálogo para Clientes (E-commerce)**:
+   - Navegación interactiva de categorías, marcas y productos en stock.
+   - Carrito de compras, cupones de descuento, wishlist y reseñas de productos.
+   - Proceso de checkout simplificado con confirmación de pedido por WhatsApp.
+   - Autenticación segura de dos factores (2FA).
 
-## Learning Laravel
+2. **Panel Administrativo (Control de Proveedores)**:
+   - **Scrapers Automáticos**: Importación y actualización en tiempo real desde proveedores externos (**Dazimportadora** y **TusTecnología**) usando comandos de consola (`php artisan daz:scrape` y `php artisan tuc:scrape`).
+   - **Aumento Global (Markup)**: Herramienta masiva para actualizar el porcentaje de ganancia sobre el precio base de los proveedores por origen o categoría.
+   - **Gestión de Pedidos & WhatsApp**: Sistema inteligente de confirmación de stock con generación de plantillas de mensajes personalizadas listas para enviar por WhatsApp al cliente.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+---
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🛠️ Tecnologías Utilizadas
 
-## Laravel Sponsors
+La aplicación está construida sobre un stack moderno y escalable:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Backend (API)
+- **Framework**: [Laravel 11](https://laravel.com) (PHP 8.2+)
+- **Buscador**: [Laravel Scout](https://laravel.com/docs/scout) para búsquedas de alta performance.
+- **Autenticación**: [Laravel Sanctum](https://laravel.com/docs/sanctum) para control de sesiones seguro mediante tokens.
+- **Scraping**: Integración nativa mediante cargadores y parseadores HTML dinámicos.
 
-### Premium Partners
+### Frontend (Single Page Application)
+- **Framework**: [Vue 3](https://vuejs.org) (Composition API con TypeScript).
+- **Compilador/Bundler**: [Vite](https://vite.dev) para desarrollo rápido y optimización del bundle de producción.
+- **Manejador de Estado**: [Pinia](https://pinia.vuejs.org) para el manejo de sesiones de usuario, carritos, productos y pedidos.
+- **Estilos (CSS)**: Tailwind CSS y estilos Vanilla curados con soporte responsivo y micro-animaciones premium.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Testing & Calidad
+- **Pruebas Backend**: [PHPUnit](https://phpunit.de) para pruebas unitarias y de integración de endpoints, controladores y scrapers.
+- **Pruebas Frontend (E2E)**: [Playwright](https://playwright.dev) para pruebas automatizadas completas de flujos de usuario (compra, checkout, 2fa, markup de admin).
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## 🚀 Instalación y Desarrollo Local
 
-## Code of Conduct
+### Requisitos Previos
+- PHP >= 8.2
+- Composer
+- Node.js >= 18
+- MySQL o SQLite
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Pasos
+1. **Clonar el Repositorio**:
+   ```bash
+   git clone https://github.com/Osqui2015/tecno.git
+   cd tecno
+   ```
+2. **Instalar Dependencias**:
+   ```bash
+   composer install
+   npm install
+   ```
+3. **Configurar el Entorno**:
+   - Crear una copia del archivo `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Configurar la base de datos y otras variables de entorno en el nuevo archivo `.env`.
+   - Generar la clave de la aplicación:
+     ```bash
+     php artisan key:generate
+     ```
+4. **Migrar la Base de Datos**:
+   ```bash
+   php artisan migrate --seed
+   ```
+5. **Iniciar el Servidor de Desarrollo**:
+   - Para el Backend:
+     ```bash
+     php artisan serve
+     ```
+   - Para el Frontend (Vite):
+     ```bash
+     npm run dev
+     ```
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 🧪 Ejecución de Pruebas
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- **Backend**:
+  ```bash
+  php artisan test
+  ```
+- **E2E Frontend**:
+  ```bash
+  npx playwright test
+  ```
