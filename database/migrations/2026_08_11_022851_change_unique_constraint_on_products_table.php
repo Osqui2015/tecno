@@ -3,7 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Log;
 
 return new class extends Migration
 {
@@ -12,33 +11,32 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $indexes = [];
+        // 1. Intentar borrar el índice único por nombre
         try {
-            $indexes = Schema::getIndexes('products');
+            Schema::table('products', function (Blueprint $table) {
+                $table->dropUnique('products_external_id_unique');
+            });
         } catch (\Throwable $e) {
-            Log::warning("No se pudieron leer los índices de la tabla products: " . $e->getMessage());
+            // Ignorar error si no existe
         }
 
-        $indexNames = array_column($indexes, 'name');
+        // 2. Intentar borrar el índice único por array de columnas (fallback)
+        try {
+            Schema::table('products', function (Blueprint $table) {
+                $table->dropUnique(['external_id']);
+            });
+        } catch (\Throwable $e) {
+            // Ignorar error si no existe
+        }
 
-        Schema::table('products', function (Blueprint $table) use ($indexNames) {
-            $oldIndex = 'products_external_id_unique';
-            
-            if (in_array($oldIndex, $indexNames)) {
-                $table->dropUnique($oldIndex);
-            } else {
-                try {
-                    $table->dropUnique(['external_id']);
-                } catch (\Throwable $e) {
-                    // Ignorar si no existe
-                }
-            }
-
-            $newIndex = 'products_external_id_origin_unique';
-            if (!in_array($newIndex, $indexNames)) {
-                $table->unique(['external_id', 'origin'], $newIndex);
-            }
-        });
+        // 3. Crear el nuevo índice compuesto único
+        try {
+            Schema::table('products', function (Blueprint $table) {
+                $table->unique(['external_id', 'origin'], 'products_external_id_origin_unique');
+            });
+        } catch (\Throwable $e) {
+            // Ignorar si ya existe
+        }
     }
 
     /**
@@ -46,25 +44,20 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $indexes = [];
         try {
-            $indexes = Schema::getIndexes('products');
+            Schema::table('products', function (Blueprint $table) {
+                $table->dropUnique('products_external_id_origin_unique');
+            });
         } catch (\Throwable $e) {
-            Log::warning("No se pudieron leer los índices de la tabla products: " . $e->getMessage());
+            // Ignorar error
         }
 
-        $indexNames = array_column($indexes, 'name');
-
-        Schema::table('products', function (Blueprint $table) use ($indexNames) {
-            $newIndex = 'products_external_id_origin_unique';
-            if (in_array($newIndex, $indexNames)) {
-                $table->dropUnique($newIndex);
-            }
-
-            $oldIndex = 'products_external_id_unique';
-            if (!in_array($oldIndex, $indexNames)) {
-                $table->unique('external_id', $oldIndex);
-            }
-        });
+        try {
+            Schema::table('products', function (Blueprint $table) {
+                $table->unique('external_id', 'products_external_id_unique');
+            });
+        } catch (\Throwable $e) {
+            // Ignorar error
+        }
     }
 };
