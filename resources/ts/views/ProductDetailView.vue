@@ -369,43 +369,44 @@ function decrement() {
             <!-- Lista de reseñas -->
             <LoadingSpinner v-if="reviewsStore.loading" text="Cargando reseñas..." />
 
-            <div v-else-if="reviewsStore.reviews.length === 0" class="card p-8 text-center">
+            <div v-else-if="!Array.isArray(reviewsStore.reviews) || reviewsStore.reviews.length === 0" class="card p-8 text-center">
                 <p class="text-slate-500 font-semibold">Aún no hay reseñas para este producto.</p>
                 <p class="text-xs text-slate-400 mt-1">¡Sé el primero en dejar una!</p>
             </div>
 
             <div v-else class="space-y-3">
-                <article
-                    v-for="review in reviewsStore.reviews"
-                    :key="review.id"
-                    class="card p-4"
-                >
-                    <div class="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                            <p class="font-bold text-sm text-slate-800">{{ review.user?.name || 'Anónimo' }}</p>
-                            <p class="text-[11px] text-slate-400">{{ formatDate(review.created_at) }}</p>
-                            <span
-                                v-if="review.is_verified_purchase"
-                                class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded"
-                            >
-                                ✓ Compra verificada
-                            </span>
-                        </div>
-                        <div class="flex text-amber-400 text-sm">
-                            <span v-for="n in 5" :key="n">{{ n <= review.rating ? '★' : '☆' }}</span>
-                        </div>
-                    </div>
-                    <p v-if="review.comment" class="text-sm text-slate-700 leading-relaxed">
-                        {{ review.comment }}
-                    </p>
-                    <button
-                        v-if="auth.user?.id === review.user_id"
-                        @click="deleteReview(review.id)"
-                        class="mt-2 text-xs text-rose-500 hover:text-rose-700 font-bold transition-colors"
+                <template v-for="review in reviewsStore.reviews" :key="review?.id ?? Math.random()">
+                    <article
+                        v-if="review && review.id"
+                        class="card p-4"
                     >
-                        Eliminar
-                    </button>
-                </article>
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                                <p class="font-bold text-sm text-slate-800">{{ review.user?.name || 'Anónimo' }}</p>
+                                <p class="text-[11px] text-slate-400">{{ formatDate(review.created_at) }}</p>
+                                <span
+                                    v-if="review.is_verified_purchase"
+                                    class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded"
+                                >
+                                    ✓ Compra verificada
+                                </span>
+                            </div>
+                            <div class="flex text-amber-400 text-sm">
+                                <span v-for="n in 5" :key="n">{{ n <= (review.rating ?? 5) ? '★' : '☆' }}</span>
+                            </div>
+                        </div>
+                        <p v-if="review.comment" class="text-sm text-slate-700 leading-relaxed">
+                            {{ review.comment }}
+                        </p>
+                        <button
+                            v-if="auth.user?.id === review.user_id"
+                            @click="deleteReview(review.id)"
+                            class="mt-2 text-xs text-rose-500 hover:text-rose-700 font-bold transition-colors"
+                        >
+                            Eliminar
+                        </button>
+                    </article>
+                </template>
             </div>
         </section>
     </div>

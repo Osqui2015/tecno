@@ -88,6 +88,104 @@ La aplicación está construida sobre un stack moderno y escalable:
 
 ---
 
+## 📦 Extracción / Sincronización de Productos (Scrapers)
+
+El sistema cuenta con comandos Artisan para importar, actualizar y sincronizar el catálogo de productos desde los proveedores externos (**Dazimportadora** y **TusTecnología**), además de utilidades para mantener la base de datos consistente.
+
+### 🔹 Scraper de Dazimportadora — `daz:scrape`
+
+Scrapea productos desde `dazimportadora.com.ar` y los guarda/actualiza en la base de datos.
+
+```bash
+# Scrapea todas las páginas (delay 1s entre requests)
+php artisan daz:scrape
+
+# Solo las primeras N páginas
+php artisan daz:scrape --pages=2
+
+# Cambiar el delay entre requests (en segundos)
+php artisan daz:scrape --delay=2
+
+# Simular sin guardar en la base de datos (solo muestra qué traería)
+php artisan daz:scrape --dry-run
+
+# Vaciar productos de origen Daz antes de empezar (reimportación limpia)
+php artisan daz:scrape --fresh
+
+# Scrapear solo una categoría específica
+php artisan daz:scrape --category=hogar
+```
+
+### 🔹 Scraper de TusTecnología — `tuc:scrape`
+
+Scrapea productos desde `tustecnologiastuc.com` y los guarda/actualiza en la base de datos.
+
+```bash
+# Scrapea todas las páginas (delay 1s entre requests)
+php artisan tuc:scrape
+
+# Solo las primeras N páginas
+php artisan tuc:scrape --pages=2
+
+# Cambiar el delay entre requests (en segundos)
+php artisan tuc:scrape --delay=2
+
+# Simular sin guardar en la base de datos (solo muestra qué traería)
+php artisan tuc:scrape --dry-run
+
+# Vaciar productos de origen Tuc antes de empezar (reimportación limpia)
+php artisan tuc:scrape --fresh
+
+# Scrapear solo una categoría específica
+php artisan tuc:scrape --category=hogar
+```
+
+### 🔹 Sincronización Unificada — `products:sync`
+
+Ejecuta ambos scrapers (Daz + Tustecnología) en una sola corrida y reindexa Scout al finalizar. Es la forma recomendada para una actualización completa del catálogo.
+
+```bash
+# Scrapea ambos proveedores y reindexa el buscador
+php artisan products:sync
+
+# Saltarse Daz y scrapear solo Tustecnología
+php artisan products:sync --skip-daz
+
+# Saltarse Tustecnología y scrapear solo Daz
+php artisan products:sync --skip-tuc
+
+# No reindexar Scout al finalizar
+php artisan products:sync --no-reindex
+
+# Limitar páginas por scraper y ajustar delay
+php artisan products:sync --pages=2 --delay=2
+
+# Vaciar productos externos antes de empezar (reimportación limpia)
+php artisan products:sync --fresh
+
+# Simular sin guardar en la base de datos
+php artisan products:sync --dry-run
+```
+
+### 🔹 Sincronización de Stock Bajo — `products:sync-low-stock`
+
+Desactiva productos cuyo stock haya caído por debajo del umbral definido (`LOW_STOCK_THRESHOLD`). Útil para corregir datos legacy o tras una importación masiva.
+
+```bash
+# Sincronizar el flag 'active' según el stock actual
+php artisan products:sync-low-stock
+
+# Solo mostrar qué cambiaría, sin escribir en BD
+php artisan products:sync-low-stock --dry-run
+
+# Cambiar el tamaño del lote al recorrer la tabla
+php artisan products:sync-low-stock --chunk=500
+```
+
+> 📌 **Nota:** por defecto, los scrapers ocultan automáticamente los productos externos que no aparezcan en el scraping. Si querés **desactivar ese comportamiento** (por ejemplo, para no perder productos que temporalmente no aparecen en el catálogo del proveedor), agregá la flag `--no-hide-missing` a cualquiera de los comandos anteriores.
+
+---
+
 ## 🧪 Ejecución de Pruebas
 
 - **Backend**:

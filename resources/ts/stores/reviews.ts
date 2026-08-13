@@ -26,11 +26,13 @@ export const useReviewsStore = defineStore('reviews', () => {
         error.value = null;
         try {
             const { data } = await axios.get(`/products/${productId}/reviews`);
-            reviews.value = data.data ?? data.reviews ?? [];
-            total.value = data.total ?? 0;
+            const rawList = data.reviews?.data ?? (Array.isArray(data.reviews) ? data.reviews : (Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : [])));
+            reviews.value = Array.isArray(rawList) ? rawList.filter((r: any) => r && r.id != null) : [];
+            total.value = Number(data.total ?? reviews.value.length);
             avgRating.value = Number(data.avg_rating ?? 0);
         } catch (e: any) {
             error.value = 'No se pudieron cargar las reseñas';
+            reviews.value = [];
         } finally {
             loading.value = false;
         }
