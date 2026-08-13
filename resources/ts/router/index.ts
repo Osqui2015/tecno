@@ -98,6 +98,16 @@ const routes: RouteRecordRaw[] = [
                 meta: { requiresProducts: true },
             },
             {
+                path: 'cupones',
+                name: 'admin-coupons',
+                component: () => import('@/views/admin/AdminCouponsView.vue'),
+            },
+            {
+                path: 'usuarios',
+                name: 'admin-users',
+                component: () => import('@/views/admin/AdminUsersView.vue'),
+            },
+            {
                 path: 'pedidos',
                 name: 'admin-orders',
                 component: () => import('@/views/admin/AdminOrdersView.vue'),

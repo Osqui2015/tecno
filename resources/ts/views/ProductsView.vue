@@ -9,9 +9,11 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import ProductAutocomplete from '@/components/ProductAutocomplete.vue';
+import ProductFilters from '@/components/ProductFilters.vue';
+import Pagination from '@/components/Pagination.vue';
 
 const store = useProductsStore();
-const { searchQuery, filterCategory, filterBrand, filterSource } = storeToRefs(store);
+const { searchQuery, filterCategory, filterBrand, minPrice, maxPrice, sortBy, availableBrands } = storeToRefs(store);
 const route = useRoute();
 
 onMounted(() => {
@@ -37,15 +39,25 @@ watch(
     }
 );
 
-
+watch([filterCategory, filterBrand, minPrice, maxPrice, sortBy], () => {
+    store.fetchProducts(1);
+});
 
 const products = computed(() => store.filteredProducts);
 
 function clearFilters() {
     store.setCategory(null);
-    store.setBrand(null);
-    store.setSource('all');
+    store.filterBrand = null;
+    store.minPrice = null;
+    store.maxPrice = null;
+    store.sortBy = 'name_asc';
     store.setSearch('');
+    store.fetchProducts(1);
+}
+
+function handlePageChange(page: number) {
+    store.fetchProducts(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 const activeFilters = computed(() => {
@@ -55,13 +67,12 @@ const activeFilters = computed(() => {
         if (cat) f.push({ label: cat.name, clear: () => store.setCategory(null) });
     }
     if (store.filterBrand) {
-        f.push({ label: store.filterBrand, clear: () => store.setBrand(null) });
+        f.push({ label: store.filterBrand, clear: () => store.filterBrand = null });
     }
-    if (store.filterSource !== 'all') {
-        f.push({
-            label: store.filterSource === 'daz' ? 'Dazimport' : 'Locales',
-            clear: () => store.setSource('all'),
-        });
+    if (store.minPrice !== null || store.maxPrice !== null) {
+        const min = store.minPrice ? `$${store.minPrice}` : '$0';
+        const max = store.maxPrice ? `$${store.maxPrice}` : '∞';
+        f.push({ label: `${min} - ${max}`, clear: () => { store.minPrice = null; store.maxPrice = null; } });
     }
     if (store.searchQuery.trim()) {
         f.push({ label: `"${store.searchQuery}"`, clear: () => store.setSearch('') });
@@ -77,67 +88,22 @@ const activeFilters = computed(() => {
             title="Todos los productos"
             :subtitle="
                 store.totalProducts > 0
-                    ? `${store.totalProducts} productos en el catálogo · ${products.length} visibles`
-                    : `${products.length} productos encontrados`
+                    ? `${store.totalProducts} productos en el catálogo`
+                    : 'Catálogo de productos'
             "
         />
 
-        <!-- Search bar & filters card (sticky) -->
-        <div class="sticky top-16 z-40 card p-5 animate-fade-in space-y-4 backdrop-blur-md bg-white/95 border border-slate-100 shadow-lg">
-            <div class="relative">
-                <ProductAutocomplete
-                    placeholder="Buscar por nombre, marca o SKU..."
-                    :max-results="10"
-                />
-            </div>
+        <!-- Search bar -->
+        <div class="card p-4 animate-fade-in backdrop-blur-md bg-white/95 dark:bg-slate-900/95 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <ProductAutocomplete
+                placeholder="Buscar por nombre, marca o SKU..."
+                :max-results="10"
+            />
 
-            <!-- Filter row -->
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="flex flex-wrap gap-2.5 flex-1 min-w-[280px]">
-                    <div class="relative flex-1 max-w-[220px]">
-                        <select
-                            :value="store.filterCategory ?? ''"
-                            @change="store.setCategory(Number(($event.target as HTMLSelectElement).value) || null)"
-                            class="input cursor-pointer pr-8 bg-no-repeat appearance-none"
-                            style="background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22%3E%3Cpath d=%22M7 9l3 3 3-3%22 stroke=%22%236b7280%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E'); background-position: right 0.75rem center; background-size: 1.25rem;"
-                        >
-                            <option value="">Categorías</option>
-                            <option
-                                v-for="cat in store.categories"
-                                :key="cat.id"
-                                :value="cat.id"
-                            >
-                                {{ cat.name }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="relative flex-1 max-w-[220px]" v-if="store.brands.length > 0">
-                        <select
-                            :value="store.filterBrand ?? ''"
-                            @change="store.setBrand(($event.target as HTMLSelectElement).value || null)"
-                            class="input cursor-pointer pr-8 bg-no-repeat appearance-none"
-                            style="background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22%3E%3Cpath d=%22M7 9l3 3 3-3%22 stroke=%22%236b7280%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E'); background-position: right 0.75rem center; background-size: 1.25rem;"
-                        >
-                            <option value="">Marcas</option>
-                            <option
-                                v-for="brand in store.brands"
-                                :key="brand"
-                                :value="brand"
-                            >
-                                {{ brand }}
-                            </option>
-                        </select>
-                    </div>
-                </div>
-
-
-            </div>
-
-            <!-- Active filters drawer -->
+            <!-- Chips de filtros activos -->
             <div
                 v-if="activeFilters.length > 0"
-                class="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100/80"
+                class="flex flex-wrap items-center gap-2 pt-3 mt-3 border-t border-slate-100 dark:border-slate-800"
             >
                 <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Filtros activos:</span>
                 <button
@@ -158,65 +124,55 @@ const activeFilters = computed(() => {
             </div>
         </div>
 
-        <!-- Products List Results -->
-        <LoadingSpinner v-if="store.loading" text="Buscando en catálogo..." />
-
-        <EmptyState
-            v-else-if="products.length === 0"
-            icon="search"
-            title="No se encontraron productos"
-            description="Intenta modificar la búsqueda o los filtros seleccionados para encontrar lo que buscas."
-        >
-            <template #actions>
-                <button @click="clearFilters" class="btn btn-primary">
-                    Limpiar todos los filtros
-                </button>
-            </template>
-        </EmptyState>
-
-        <div
-            v-else
-            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
-        >
-            <ProductCard
-                v-for="(product, i) in products"
-                :key="product.id"
-                :product="product"
-                :style="{ animationDelay: `${Math.min(i * 40, 320)}ms` }"
-            />
-        </div>
-
-        <!-- Load more button -->
-        <div
-            v-if="!store.loading && products.length > 0"
-            class="flex flex-col items-center gap-2 pt-6"
-        >
-            <button
-                v-if="store.hasMore"
-                @click="store.fetchMore()"
-                :disabled="store.loadingMore"
-                class="btn btn-lg btn-primary px-8 rounded-xl shadow-md"
-            >
-                <LoadingSpinner v-if="store.loadingMore" small />
-                <template v-else>
-                    <SvgIcon name="plus" size="1rem" />
-                    <span>Cargar más productos</span>
-                </template>
-            </button>
-
-            <div
-                v-else-if="products.length > 0"
-                class="flex items-center gap-2 text-xs text-slate-400 font-medium"
-            >
-                <SvgIcon name="check" size="0.85rem" class="text-emerald-500" />
-                <span>Mostrando todos los {{ store.totalProducts }} productos</span>
+        <!-- Grid Principal: Sidebar Filtros + Productos -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Sidebar Filtros -->
+            <div class="lg:col-span-1">
+                <ProductFilters
+                    :available-brands="availableBrands"
+                    v-model:brand="filterBrand"
+                    v-model:min-price="minPrice"
+                    v-model:max-price="maxPrice"
+                    v-model:sort-by="sortBy"
+                    @clear-filters="clearFilters"
+                />
             </div>
 
-            <div
-                v-if="store.hasMore"
-                class="text-xs text-slate-400"
-            >
-                Mostrando {{ products.length }} de {{ store.totalProducts }} productos
+            <!-- Listado de Productos & Paginación -->
+            <div class="lg:col-span-3 space-y-6">
+                <LoadingSpinner v-if="store.loading" text="Cargando productos..." />
+
+                <EmptyState
+                    v-else-if="products.length === 0"
+                    icon="search"
+                    title="No se encontraron productos"
+                    description="Intenta modificar la búsqueda o los filtros de precio/marca para encontrar lo que buscas."
+                >
+                    <template #actions>
+                        <button @click="clearFilters" class="btn btn-primary">
+                            Limpiar todos los filtros
+                        </button>
+                    </template>
+                </EmptyState>
+
+                <div v-else class="space-y-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <ProductCard
+                            v-for="(product, i) in products"
+                            :key="product.id"
+                            :product="product"
+                            :style="{ animationDelay: `${Math.min(i * 40, 320)}ms` }"
+                        />
+                    </div>
+
+                    <!-- Componente Paginación -->
+                    <Pagination
+                        :current-page="store.currentPage"
+                        :last-page="store.lastPage"
+                        :total="store.totalProducts"
+                        @page-change="handlePageChange"
+                    />
+                </div>
             </div>
         </div>
     </div>

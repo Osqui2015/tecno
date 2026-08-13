@@ -234,4 +234,162 @@ class ProductController extends Controller
             'updated' => $count,
         ]);
     }
+
+    /**
+     * GET /api/admin/products/export/csv
+     * Exporta todo el catálogo de productos a un archivo CSV codificado en UTF-8 con BOM.
+     */
+    public function exportCsv(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $fileName = 'productos_' . date('Y-m-d_H-i') . '.csv';
+
+        return response()->streamDownload(function () {
+            $handle = fopen('php://output', 'w');
+            // Escribir UTF-8 BOM para que Excel abra los caracteres especiales (acentos, ñ) correctamente
+            fprintf($handle, "\xEF\xBB\xBF");
+
+            // Header del CSV
+            fputcsv($handle, [
+                'ID',
+                'SKU',
+                'Nombre',
+                'Marca',
+                'Precio Base',
+                'Precio Lista',
+                'Precio Efectivo',
+                'Markup %',
+                'Stock',
+                'Activo',
+                'ID Categoria',
+            ]);
+
+            Product::chunk(100, function ($products) use ($handle) {
+                foreach ($products as $p) {
+                    fputcsv($handle, [
+                        $p->id,
+                        $p->sku,
+                        $p->name,
+                        $p->brand,
+                        $p->price,
+                        $p->list_price,
+                        $p->cash_price,
+                        $p->markup_percent,
+                        $p->stock,
+                        $p->active ? 'SI' : 'NO',
+                        $p->category_id,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ]);
+    }
+
+    /**
+     * POST /api/admin/products/import/csv
+     * Importa / Actualiza productos masivamente desde un archivo CSV.
+     */
+    public function importCsv(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->getRealPath();
+
+        $handle = fopen($path, 'r');
+        if (! $handle) {
+            return response()->json(['message' => 'No se pudo abrir el archivo CSV'], 422);
+        }
+
+        // Leer primera línea (encabezados)
+        $headers = fgetcsv($handle, 2000, ',');
+        if (! $headers) {
+            fclose($handle);
+            return response()->json(['message' => 'El archivo CSV está vacío'], 422);
+        }
+
+        // Normalizar encabezados (quitar BOM y minúsculas)
+        $cleanHeaders = array_map(function ($h) {
+            $h = preg_replace('/[\x00-\x1F\x7F-\xFF]/', '', $h);
+            return strtolower(trim($h));
+        }, $headers);
+
+        $createdCount = 0;
+        $updatedCount = 0;
+        $errorCount = 0;
+
+        DB::transaction(function () use ($handle, $cleanHeaders, &$createdCount, &$updatedCount, &$errorCount) {
+            while (($row = fgetcsv($handle, 2000, ',')) !== false) {
+                if (count($row) < 2) continue;
+
+                $data = array_combine(array_slice($cleanHeaders, 0, count($row)), $row);
+
+                $sku   = trim($data['sku'] ?? $data['code'] ?? '');
+                $name  = trim($data['nombre'] ?? $data['name'] ?? '');
+                $price = numeric_or_null($data['precio base'] ?? $data['price'] ?? null);
+                $stock = isset($data['stock']) ? (int) $data['stock'] : 0;
+                $brand = trim($data['marca'] ?? $data['brand'] ?? '');
+                $catId = isset($data['id categoria']) ? (int) $data['id categoria'] : (int) ($data['category_id'] ?? 1);
+                $active = isset($data['activo']) ? in_array(strtoupper(trim($data['activo'])), ['SI', 'YES', '1', 'TRUE']) : true;
+
+                if (empty($name) && empty($sku)) {
+                    $errorCount++;
+                    continue;
+                }
+
+                // Buscar producto existente por SKU o por Nombre
+                $product = null;
+                if (! empty($sku)) {
+                    $product = Product::where('sku', $sku)->first();
+                }
+                if (! $product && ! empty($name)) {
+                    $product = Product::where('name', $name)->first();
+                }
+
+                if ($product) {
+                    $product->update(array_filter([
+                        'price'       => $price ?? $product->price,
+                        'stock'       => $stock,
+                        'brand'       => $brand ?: $product->brand,
+                        'category_id' => $catId ?: $product->category_id,
+                        'active'      => $active,
+                    ], fn ($v) => $v !== null));
+                    $updatedCount++;
+                } else {
+                    Product::create([
+                        'sku'         => $sku ?: null,
+                        'name'        => $name,
+                        'slug'        => Str::slug($name) . '-' . Str::random(4),
+                        'price'       => $price ?? 0,
+                        'stock'       => $stock,
+                        'brand'       => $brand ?: null,
+                        'category_id' => $catId ?: 1,
+                        'active'      => $active,
+                    ]);
+                    $createdCount++;
+                }
+            }
+        });
+
+        fclose($handle);
+
+        return response()->json([
+            'message'  => "Importación completada: {$createdCount} creados, {$updatedCount} actualizados, {$errorCount} omitidos.",
+            'created'  => $createdCount,
+            'updated'  => $updatedCount,
+            'errors'   => $errorCount,
+        ]);
+    }
+}
+
+function numeric_or_null($val): ?float
+{
+    if ($val === null || $val === '') return null;
+    $val = str_replace(['$', ' '], '', (string) $val);
+    return is_numeric($val) ? (float) $val : null;
 }

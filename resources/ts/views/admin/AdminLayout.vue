@@ -46,6 +46,20 @@ const showOrdersTab = computed(() => auth.canManageOrders);
                     Productos
                 </router-link>
                 <router-link
+                    :to="{ name: 'admin-coupons' }"
+                    class="px-4 py-2.5 rounded-xl text-xs font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                    active-class="!bg-white/20 !text-white"
+                >
+                    Cupones
+                </router-link>
+                <router-link
+                    :to="{ name: 'admin-users' }"
+                    class="px-4 py-2.5 rounded-xl text-xs font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                    active-class="!bg-white/20 !text-white"
+                >
+                    Usuarios
+                </router-link>
+                <router-link
                     v-if="showOrdersTab"
                     :to="{ name: 'admin-orders' }"
                     class="px-4 py-2.5 rounded-xl text-xs font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors"

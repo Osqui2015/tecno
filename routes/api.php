@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
@@ -87,11 +89,28 @@ Route::middleware(['auth:sanctum', 'admin', 'throttle:admin-write'])->prefix('ad
 
     // Gestión de productos
     Route::get('/products',              [AdminProductController::class, 'index']);
+    Route::get('/products/export/csv',   [AdminProductController::class, 'exportCsv']);
+    Route::post('/products/import/csv',  [AdminProductController::class, 'importCsv']);
     Route::post('/products',             [AdminProductController::class, 'store']);
     Route::get('/products/{id}',         [AdminProductController::class, 'show'])->whereNumber('id');
     Route::patch('/products/{id}',       [AdminProductController::class, 'update'])->whereNumber('id');
     Route::delete('/products/{id}',      [AdminProductController::class, 'destroy'])->whereNumber('id');
     Route::post('/products/bulk-markup', [AdminProductController::class, 'bulkMarkup']);
+
+    // Gestión de cupones (Admin CRUD)
+    Route::get('/coupons',               [AdminCouponController::class, 'index']);
+    Route::post('/coupons',              [AdminCouponController::class, 'store']);
+    Route::get('/coupons/{id}',          [AdminCouponController::class, 'show'])->whereNumber('id');
+    Route::patch('/coupons/{id}',        [AdminCouponController::class, 'update'])->whereNumber('id');
+    Route::patch('/coupons/{id}/toggle', [AdminCouponController::class, 'toggleActive'])->whereNumber('id');
+    Route::delete('/coupons/{id}',       [AdminCouponController::class, 'destroy'])->whereNumber('id');
+
+    // Gestión de usuarios / perfiles (Admin CRUD)
+    Route::get('/users',                 [AdminUserController::class, 'index']);
+    Route::post('/users',                [AdminUserController::class, 'store']);
+    Route::get('/users/{id}',            [AdminUserController::class, 'show'])->whereNumber('id');
+    Route::patch('/users/{id}',          [AdminUserController::class, 'update'])->whereNumber('id');
+    Route::delete('/users/{id}',         [AdminUserController::class, 'destroy'])->whereNumber('id');
 
     // Gestión de pedidos
     Route::get('/orders',                       [AdminOrderController::class, 'index']);

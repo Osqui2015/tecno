@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, reactive, computed, watch } from 'vue';
 import { useAdminStore } from '@/stores/admin';
+import axios from '@/bootstrap';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 
 const admin = useAdminStore();
+const totalPages = computed(() => admin.productMeta?.last_page ?? 1);
 
 // Umbral: productos con menos de este stock se ocultan por defecto.
 const LOW_STOCK_THRESHOLD = 5;
@@ -77,7 +79,45 @@ function prevPage() { if (filters.page > 1) filters.page--; }
 const formatPrice = (n: number | string) =>
     '$' + Math.round(Number(n)).toLocaleString('es-AR');
 
-const totalPages = computed(() => admin.productMeta?.last_page ?? 1);
+const showImportModal = ref(false);
+const importFile = ref<File | null>(null);
+const importing = ref(false);
+const importMessage = ref('');
+
+function exportCsv() {
+    window.location.href = '/api/admin/products/export/csv';
+}
+
+function handleFileChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        importFile.value = target.files[0];
+    }
+}
+
+async function uploadCsv() {
+    if (!importFile.value) return;
+    importing.value = true;
+    importMessage.value = '';
+    try {
+        const formData = new FormData();
+        formData.append('file', importFile.value);
+        const { data } = await axios.post('/api/admin/products/import/csv', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        importMessage.value = data.message;
+        load();
+        setTimeout(() => {
+            showImportModal.value = false;
+            importFile.value = null;
+            importMessage.value = '';
+        }, 2000);
+    } catch (err: any) {
+        importMessage.value = err.response?.data?.message || 'Error al importar CSV';
+    } finally {
+        importing.value = false;
+    }
+}
 </script>
 
 <template>
@@ -106,6 +146,12 @@ const totalPages = computed(() => admin.productMeta?.last_page ?? 1);
                 </select>
                 <button @click="clearFilters" class="btn btn-ghost btn-sm">
                     Limpiar
+                </button>
+                <button @click="exportCsv" class="btn btn-secondary btn-sm flex items-center gap-1">
+                    <span>Exportar CSV</span>
+                </button>
+                <button @click="showImportModal = true" class="btn btn-secondary btn-sm flex items-center gap-1">
+                    <span>Importar CSV</span>
                 </button>
                 <button @click="showBulkModal = true" class="btn btn-primary btn-sm">
                     <SvgIcon name="cog" size="0.95rem" />
@@ -268,6 +314,48 @@ const totalPages = computed(() => admin.productMeta?.last_page ?? 1);
                     <div class="p-5 border-t border-slate-100 flex gap-2">
                         <button @click="showBulkModal = false" class="btn btn-ghost flex-1">Cancelar</button>
                         <button @click="applyBulkMarkup" class="btn btn-primary flex-1">Aplicar</button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+        <!-- Modal: Importar CSV -->
+        <transition name="modal">
+            <div v-if="showImportModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" @click.self="showImportModal = false">
+                <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 dark:border-slate-800">
+                    <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <h3 class="font-extrabold text-base text-slate-800 dark:text-slate-100">Importar Productos desde CSV</h3>
+                        <button @click="showImportModal = false" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                            <SvgIcon name="close" size="1rem" />
+                        </button>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Selecciona un archivo CSV con las columnas: <span class="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">SKU, Nombre, Precio Base, Stock, Marca, ID Categoria</span>.
+                        </p>
+
+                        <div class="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-primary-500 transition-colors">
+                            <input type="file" accept=".csv, .txt" @change="handleFileChange" class="hidden" id="csv_input" />
+                            <label for="csv_input" class="cursor-pointer block space-y-2">
+                                <SvgIcon name="box" size="2rem" class="mx-auto text-slate-400" />
+                                <span class="block text-xs font-bold text-primary-600 dark:text-primary-400">
+                                    {{ importFile ? importFile.name : 'Haz clic para seleccionar un archivo CSV' }}
+                                </span>
+                            </label>
+                        </div>
+
+                        <div v-if="importMessage" :class="importMessage.includes('completada') ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50' : 'text-rose-600 bg-rose-50 dark:bg-rose-950/50'" class="p-3 rounded-xl text-xs font-semibold">
+                            {{ importMessage }}
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button @click="showImportModal = false" class="btn btn-secondary text-xs">
+                                Cancelar
+                            </button>
+                            <button @click="uploadCsv" :disabled="!importFile || importing" class="btn btn-primary text-xs flex items-center gap-2">
+                                <LoadingSpinner v-if="importing" size="sm" />
+                                <span>{{ importing ? 'Procesando...' : 'Iniciar Importación' }}</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

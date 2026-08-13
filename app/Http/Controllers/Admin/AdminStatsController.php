@@ -68,9 +68,9 @@ class AdminStatsController extends Controller
             ->limit(5)
             ->get(['id', 'user_id', 'total', 'status', 'created_at', 'customer_full_name']);
 
-        // 8) Ventas últimos 7 días (para gráfico simple)
-        $salesLast7Days = Order::where('status', '!=', Order::STATUS_CANCELLED)
-            ->where('created_at', '>=', now()->subDays(6)->startOfDay())
+        // 8) Ventas últimos 30 días (para gráfico interactivo)
+        $salesLast30Days = Order::where('status', '!=', Order::STATUS_CANCELLED)
+            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
             ->select(
                 DB::raw('DATE(created_at) as date'),
                 DB::raw('COUNT(*) as orders_count'),
@@ -78,6 +78,19 @@ class AdminStatsController extends Controller
             )
             ->groupBy('date')
             ->orderBy('date')
+            ->get();
+
+        // 9) Ventas por Categoría (Top 5)
+        $categoriesSales = DB::table('order_items')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->join('categories', 'products.category_id', '=', 'categories.id')
+            ->select(
+                'categories.name as category',
+                DB::raw('SUM(order_items.qty * order_items.price) as total_sales')
+            )
+            ->groupBy('categories.name')
+            ->orderByDesc('total_sales')
+            ->limit(5)
             ->get();
 
         return response()->json([
@@ -98,9 +111,11 @@ class AdminStatsController extends Controller
                 'avg_ticket' => round($avgTicket, 2),
                 'month_orders_count' => $monthOrders,
             ],
-            'top_products'  => $topProducts,
-            'recent_orders' => $recentOrders,
-            'sales_7_days'  => $salesLast7Days,
+            'top_products'      => $topProducts,
+            'recent_orders'     => $recentOrders,
+            'sales_7_days'      => $salesLast30Days,
+            'sales_last_30_days' => $salesLast30Days,
+            'categories_sales'  => $categoriesSales,
         ]);
     }
 }

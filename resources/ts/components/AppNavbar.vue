@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useCartStore } from '@/stores/cart';
 import SvgIcon from '@/components/SvgIcon.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 const auth = useAuthStore();
 const cart = useCartStore();
@@ -105,6 +106,8 @@ function closeMobile() {
  
                 <!-- Right side -->
                 <div class="flex items-center gap-3">
+                    <ThemeToggle />
+
                     <router-link
                         :to="{ name: 'cart' }"
                         class="nav-link relative p-2 rounded-xl text-white hover:bg-white/5 transition-all duration-200"

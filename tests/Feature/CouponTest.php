@@ -43,7 +43,7 @@ class CouponTest extends TestCase
 
         $coupon = Coupon::factory()->create(['code' => 'VERANO25', 'type' => 'percent', 'value' => 25]);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 2); // subtotal = 2000
 
         $response = $this->actingAs($buyer, 'sanctum')
@@ -63,7 +63,7 @@ class CouponTest extends TestCase
 
         Coupon::factory()->fixed(200)->create(['code' => 'FIXED200']);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 3); // subtotal = 3000
 
         $response = $this->actingAs($buyer, 'sanctum')
@@ -81,7 +81,7 @@ class CouponTest extends TestCase
 
         $coupon = Coupon::factory()->create(['code' => 'USEME', 'value' => 10]);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 1);
 
         $this->actingAs($buyer, 'sanctum')
@@ -98,7 +98,7 @@ class CouponTest extends TestCase
 
         Coupon::factory()->expired()->create(['code' => 'OLD']);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 1);
 
         $this->actingAs($buyer, 'sanctum')
@@ -112,7 +112,7 @@ class CouponTest extends TestCase
     {
         Coupon::factory()->inactive()->create(['code' => 'INACTIVE']);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 1);
 
         $this->actingAs($buyer, 'sanctum')
@@ -124,7 +124,7 @@ class CouponTest extends TestCase
     public function nonexistent_coupon_is_rejected(): void
     {
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 1);
 
         $this->actingAs($buyer, 'sanctum')
@@ -137,7 +137,7 @@ class CouponTest extends TestCase
     {
         Coupon::factory()->create(['code' => 'MIN500', 'min_subtotal' => 5000]);
         $buyer  = $this->makeBuyerWithProfile();
-        $product = Product::factory()->create(['price' => 1000]);
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 10, 'active' => true]);
         $this->addToCart($buyer, $product, 1); // subtotal = 1000 < 5000
 
         $this->actingAs($buyer, 'sanctum')

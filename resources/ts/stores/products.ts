@@ -49,34 +49,17 @@ export const useProductsStore = defineStore('products', () => {
     const filterBrand = ref<string | null>(null);
     const filterSource = ref<'all' | 'daz' | 'local'>('all');
     const searchQuery = ref('');
+    const minPrice = ref<number | null>(null);
+    const maxPrice = ref<number | null>(null);
+    const sortBy = ref<string>('name_asc');
+    const availableBrands = ref<{ brand: string; count: number }[]>([]);
 
-    const filteredProducts = computed(() => {
-        let result = products.value;
-        if (filterCategory.value) {
-            result = result.filter((p) => p.category_id === filterCategory.value);
-        }
-        if (filterBrand.value) {
-            result = result.filter((p) => p.brand === filterBrand.value);
-        }
-        if (filterSource.value === 'daz') {
-            result = result.filter((p) => !!p.external_id);
-        } else if (filterSource.value === 'local') {
-            result = result.filter((p) => !p.external_id);
-        }
-        if (searchQuery.value.trim()) {
-            const q = searchQuery.value.toLowerCase();
-            result = result.filter(
-                (p) =>
-                    p.name.toLowerCase().includes(q) ||
-                    p.description?.toLowerCase().includes(q) ||
-                    p.brand?.toLowerCase().includes(q) ||
-                    p.sku?.toLowerCase().includes(q)
-            );
-        }
-        return result;
-    });
+    const filteredProducts = computed(() => products.value);
 
     const brands = computed(() => {
+        if (availableBrands.value.length > 0) {
+            return availableBrands.value.map(b => b.brand);
+        }
         const set = new Set<string>();
         products.value.forEach((p) => {
             if (p.brand) {
@@ -86,18 +69,32 @@ export const useProductsStore = defineStore('products', () => {
         return Array.from(set).sort();
     });
 
-    async function fetchProducts() {
+    async function fetchProducts(page: number = 1) {
         loading.value = true;
         error.value = null;
+        currentPage.value = page;
         try {
-            const params: any = { page: 1, per_page: 60 };
+            const params: any = { page, per_page: 20, sort_by: sortBy.value };
             if (searchQuery.value.trim()) {
                 params.search = searchQuery.value.trim();
             }
             if (filterCategory.value) {
                 params.category_id = filterCategory.value;
             }
+            if (filterBrand.value) {
+                params.brand = filterBrand.value;
+            }
+            if (minPrice.value !== null && minPrice.value !== undefined) {
+                params.min_price = minPrice.value;
+            }
+            if (maxPrice.value !== null && maxPrice.value !== undefined) {
+                params.max_price = maxPrice.value;
+            }
+
             const { data } = await axios.get('/products', { params });
+            if (data.available_brands) {
+                availableBrands.value = data.available_brands;
+            }
             applyPageResponse(data, /*reset=*/ true);
         } catch (e: any) {
             error.value = e.response?.data?.message || 'Error al cargar productos';
@@ -234,6 +231,10 @@ export const useProductsStore = defineStore('products', () => {
         filterBrand,
         filterSource,
         searchQuery,
+        minPrice,
+        maxPrice,
+        sortBy,
+        availableBrands,
         filteredProducts,
         brands,
         fetchProducts,
