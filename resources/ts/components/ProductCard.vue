@@ -16,9 +16,10 @@ const auth = useAuthStore();
 const wishlist = useWishlistStore();
 const router = useRouter();
 
-const isFav = computed(() => wishlist.has(props.product.id));
+const isFav = computed(() => props.product?.id ? wishlist.has(props.product.id) : false);
 
 async function toggleFav() {
+    if (!props.product?.id) return;
     if (!auth.isAuthenticated) {
         router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
         return;
@@ -27,15 +28,15 @@ async function toggleFav() {
 }
 
 const displayPrice = computed(() => {
+    if (!props.product) return 0;
     const p = props.product as any;
-    // Si viene del admin, tiene final_price. Si no, calculamos.
     if (p.final_price != null) return Number(p.final_price);
-    const listPrice = Number(props.product.list_price);
-    return listPrice > 0 ? listPrice : Number(props.product.price);
+    const listPrice = Number(props.product.list_price ?? 0);
+    return listPrice > 0 ? listPrice : Number(props.product.price ?? 0);
 });
 
 const stockStatus = computed(() => {
-    const s = props.product.stock;
+    const s = props.product?.stock ?? 0;
     if (s <= 0) return { label: 'Sin stock', cls: 'chip-danger' };
     if (s < 10) return { label: `¡Últimas ${s}!`, cls: 'chip-warning' };
     return { label: `${s} disponibles`, cls: 'chip-success' };
@@ -48,6 +49,7 @@ const imageError = ref(false);
 const added = ref(false);
 
 async function addToCart() {
+    if (!props.product?.id) return;
     if (!auth.isAuthenticated) {
         router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
         return;
@@ -62,6 +64,7 @@ async function addToCart() {
 
 <template>
     <article
+        v-if="product && product.id"
         class="group bg-white rounded-xl border border-slate-200/50 overflow-hidden hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:border-brand-100/50 transition-all duration-300 flex flex-col relative animate-fade-in"
     >
         <!-- Image -->

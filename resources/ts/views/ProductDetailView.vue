@@ -82,15 +82,15 @@ const displayPrice = computed(() => {
     if (!product.value) return 0;
     const p = product.value as any;
     if (p.final_price != null) return Number(p.final_price);
-    const listPrice = Number(product.value.list_price);
-    return listPrice > 0 ? listPrice : Number(product.value.price);
+    const listPrice = Number(product.value.list_price ?? 0);
+    return listPrice > 0 ? listPrice : Number(product.value.price ?? 0);
 });
 
 const formatPrice = (n: number) =>
     '$' + Math.round(n).toLocaleString('es-AR');
 
 async function addToCart() {
-    if (!product.value) return;
+    if (!product.value?.id) return;
     if (!auth.isAuthenticated) {
         router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
         return;
@@ -114,7 +114,7 @@ const related = computed(() => {
     if (!current || current.id == null) return [];
     const currentId = current.id;
     const currentCat = current.category_id;
-    return productsStore.products
+    return (productsStore.products || [])
         // Defensa: descartamos cualquier item malformado (sin id o null)
         .filter((p): p is NonNullable<typeof p> => p != null && p.id != null)
         .filter((p) => p.id !== currentId && p.category_id === currentCat)
@@ -145,12 +145,12 @@ function decrement() {
         </template>
     </EmptyState>
 
-    <div v-else class="space-y-8">
+    <div v-else-if="product" class="space-y-8">
         <Breadcrumb
             :items="[
                 { label: 'Inicio', to: { name: 'home' } },
                 { label: product.category?.name ?? 'Productos', to: { name: 'products' } },
-                { label: product.name },
+                { label: product.name ?? '' },
             ]"
         />
 

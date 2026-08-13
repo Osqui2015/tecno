@@ -33,7 +33,8 @@ export const useWishlistStore = defineStore('wishlist', () => {
         loading.value = true;
         try {
             const { data } = await axios.get('/wishlist');
-            items.value = data.items ?? [];
+            const rawItems = data.items ?? [];
+            items.value = rawItems.filter((i: any) => i && i.product && i.product.id);
             count.value = data.count ?? 0;
         } catch (e: any) {
             error.value = 'Error al cargar favoritos';

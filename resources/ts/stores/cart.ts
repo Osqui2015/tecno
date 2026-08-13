@@ -77,7 +77,8 @@ export const useCartStore = defineStore('cart', () => {
         error.value = null;
         try {
             const { data } = await axios.get<CartResponse>('/cart');
-            items.value = data.items ?? [];
+            const rawItems = data.items ?? [];
+            items.value = rawItems.filter((i: any) => i && i.product && i.product.id);
             total.value = Number(data.total ?? 0);
             itemsCount.value = Number(data.items_count ?? 0);
             minPurchase.value = Number(data.min_purchase ?? 0);

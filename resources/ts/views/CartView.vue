@@ -210,7 +210,7 @@ async function confirmRemove(itemId: number) {
                             v-else
                             @click="confirmRemoveId === item.id ? confirmRemove(item.id) : askRemove(item.id)"
                             :disabled="cart.loading"
-                            class="hidden sm:inline-flex items-center gap-1.5 px-3 h-9 text-[11px] font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer disabled:opacity-50"
+                            class="inline-flex items-center gap-1.5 px-3 h-9 text-[11px] font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer disabled:opacity-50"
                             :class="confirmRemoveId === item.id
                                 ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700'
                                 : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'"
@@ -225,15 +225,18 @@ async function confirmRemove(itemId: number) {
                                 class="font-black text-base"
                                 :class="item.qty === 0 ? 'text-slate-400 line-through' : 'text-slate-800'"
                             >
-                                {{ formatPrice(Number(item.subtotal || (Number(item.product.final_price ?? item.product.price) * item.qty))) }}
+                                {{ formatPrice(Number(item.subtotal || (Number(item.product?.final_price ?? item.product?.price ?? 0) * item.qty))) }}
                             </p>
                             <button
                                 v-if="item.qty > 0"
-                                @click="askRemove(item.id)"
-                                class="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-600 mt-1.5 font-bold transition-colors cursor-pointer"
+                                @click="confirmRemoveId === item.id ? confirmRemove(item.id) : askRemove(item.id)"
+                                class="inline-flex items-center gap-1 text-[11px] mt-1.5 font-bold transition-colors cursor-pointer"
+                                :class="confirmRemoveId === item.id
+                                    ? 'text-rose-600 font-extrabold scale-105'
+                                    : 'text-slate-400 hover:text-rose-600'"
                             >
                                 <SvgIcon name="trash" size="0.7rem" />
-                                <span>Eliminar</span>
+                                <span>{{ confirmRemoveId === item.id ? 'Confirmar' : 'Eliminar' }}</span>
                             </button>
                         </div>
                     </div>
@@ -260,8 +263,11 @@ async function confirmRemove(itemId: number) {
                             </button>
                         </div>
                         <button
-                            @click="item.qty > 0 ? askRemove(item.id) : (confirmRemoveId === item.id ? confirmRemove(item.id) : askRemove(item.id))"
-                            class="text-[11px] font-bold text-rose-600 px-3 py-1.5 rounded-lg bg-rose-50"
+                            @click="confirmRemoveId === item.id ? confirmRemove(item.id) : askRemove(item.id)"
+                            class="text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                            :class="confirmRemoveId === item.id
+                                ? 'bg-rose-600 text-white'
+                                : 'text-rose-600 bg-rose-50 hover:bg-rose-100'"
                         >
                             {{ confirmRemoveId === item.id ? 'Confirmar' : 'Quitar' }}
                         </button>
