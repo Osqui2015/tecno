@@ -108,6 +108,11 @@ const routes: RouteRecordRaw[] = [
                 component: () => import('@/views/admin/AdminUsersView.vue'),
             },
             {
+                path: 'configuracion',
+                name: 'admin-store-settings',
+                component: () => import('@/views/admin/AdminStoreSettingsView.vue'),
+            },
+            {
                 path: 'pedidos',
                 name: 'admin-orders',
                 component: () => import('@/views/admin/AdminOrdersView.vue'),

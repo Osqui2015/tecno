@@ -25,7 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         })
         ->cron('0 */6 * * *')
         ->name('scrape-providers-sequentially')
-        ->withoutOverlapping(expireAfter: 120)
+        ->withoutOverlapping(120)
         ->before(function () {
             \Illuminate\Support\Facades\Log::info('Scheduler: Iniciando scraping secuencial de proveedores...');
         })

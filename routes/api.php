@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Admin\StoreInfoController as AdminStoreInfoController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
@@ -133,6 +134,10 @@ Route::middleware(['auth:sanctum', 'admin', 'throttle:admin-write'])->prefix('ad
 
     // Audit log
     Route::get('/audit-logs',            [\App\Http\Controllers\Admin\AuditLogController::class, 'index']);
+
+    // Configuración de la tienda (WhatsApp, dirección, redes, etc.)
+    Route::get('/store-info',    [AdminStoreInfoController::class, 'show']);
+    Route::patch('/store-info',  [AdminStoreInfoController::class, 'update']);
 
     // Stats (sub-endpoints cacheados independientemente)
     Route::get('/stats',                 [\App\Http\Controllers\Admin\AdminStatsController::class, 'index']);

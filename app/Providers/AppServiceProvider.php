@@ -17,6 +17,46 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+        $this->syncStoreConfigFromDatabase();
+    }
+
+    /**
+     * Sincroniza config('store.*') con el registro de la tabla `store_infos`.
+     *
+     * Asi, todo el código que ya usa `config('store.min_purchase')`,
+     * `config('store.name')`, etc. (OrderController, WhatsAppMessageBuilder,
+     * etc.) sigue funcionando sin cambios, pero toma los valores editables
+     * desde el panel admin.
+     *
+     * Si la tabla no existe aún (migración pendiente) o no hay registro,
+     * no hace nada y se mantienen los defaults del config file.
+     */
+    protected function syncStoreConfigFromDatabase(): void
+    {
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('store_infos')) {
+                return;
+            }
+
+            $info = \App\Models\StoreInfo::current();
+
+            $overrides = array_filter([
+                'store.name'            => $info->name,
+                'store.address'         => $info->address,
+                'store.phone'           => $info->phone,
+                'store.whatsapp_number' => $info->whatsapp_number,
+            ], fn ($v) => $v !== null && $v !== '');
+
+            if (! empty($overrides)) {
+                config($overrides);
+            }
+
+            if ($info->min_purchase !== null) {
+                config(['store.min_purchase' => (float) $info->min_purchase]);
+            }
+        } catch (\Throwable $e) {
+            // Si falla (ej. durante instalación antes de migrar), no rompemos el boot.
+        }
     }
 
     /**
