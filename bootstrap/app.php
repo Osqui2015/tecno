@@ -20,19 +20,21 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->call(function () {
-            \Illuminate\Support\Facades\Log::info('Scheduler: Iniciando scraping secuencial de proveedores...');
-            
-            \Illuminate\Support\Facades\Log::info('Scheduler: Iniciando scraping de TusTecnología...');
             \Illuminate\Support\Facades\Artisan::call('tuc:scrape', ['--delay' => 10]);
-            
-            \Illuminate\Support\Facades\Log::info('Scheduler: Iniciando scraping de Daz Importadora...');
             \Illuminate\Support\Facades\Artisan::call('daz:scrape', ['--delay' => 10]);
-            
-            \Illuminate\Support\Facades\Log::info('Scheduler: Scraping secuencial completado con éxito.');
         })
         ->cron('0 */6 * * *')
         ->name('scrape-providers-sequentially')
-        ->withoutOverlapping();
+        ->withoutOverlapping(expireAfter: 120)
+        ->before(function () {
+            \Illuminate\Support\Facades\Log::info('Scheduler: Iniciando scraping secuencial de proveedores...');
+        })
+        ->after(function () {
+            \Illuminate\Support\Facades\Log::info('Scheduler: Scraping secuencial completado con éxito.');
+        })
+        ->onFailure(function () {
+            \Illuminate\Support\Facades\Log::error('Scheduler: Falló el scraping secuencial. Revisá los logs de tuc:scrape y daz:scrape.');
+        });
     })
     ->withMiddleware(function (Middleware $middleware): void {
         // Sanctum para SPA: estado para rutas web que consuman la API

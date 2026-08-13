@@ -5,6 +5,7 @@ import { useCartStore } from '@/stores/cart';
 import { useOrdersStore } from '@/stores/orders';
 import { useAuthStore } from '@/stores/auth';
 import { useCouponStore } from '@/stores/coupon';
+import { useStoreInfo, buildWhatsappUrl } from '@/composables/useStoreInfo';
 import PageHeader from '@/components/PageHeader.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 
@@ -13,6 +14,7 @@ const cart = useCartStore();
 const orders = useOrdersStore();
 const auth = useAuthStore();
 const coupon = useCouponStore();
+const { whatsappNumber, name: storeName, load: loadStoreInfo } = useStoreInfo();
 const imageErrors = ref<Record<number, boolean>>({});
 
 const address = ref('');
@@ -28,6 +30,8 @@ const formatPrice = (n: number | string) =>
 onMounted(async () => {
     if (!auth.user) await auth.fetchUser();
     await cart.fetchCart();
+    // Cargar el número de WhatsApp de la tienda (se cachea entre componentes).
+    loadStoreInfo();
 });
 
 const valid = computed(() => {
@@ -44,6 +48,56 @@ const valid = computed(() => {
 async function applyCoupon() {
     if (cart.total <= 0) return;
     await coupon.validate(Number(cart.total));
+}
+
+/**
+ * Arma el mensaje de WhatsApp con el resumen del pedido y abre
+ * una pestaña nueva con wa.me apuntando al número de la tienda.
+ * Si no hay número configurado, no hace nada.
+ */
+function openWhatsappForOrder(order: any) {
+    if (!whatsappNumber.value) return;
+
+    const lines: string[] = [];
+    lines.push(`Hola ${storeName.value || 'Tecno-Rexs'}!`);
+    lines.push('');
+    lines.push(`Acabo de hacer el pedido #${order.id} en la web:`);
+    lines.push('');
+
+    for (const item of order.items ?? []) {
+        const name = item.product?.name ?? `Producto #${item.product_id}`;
+        const price = formatPrice(item.price);
+        lines.push(`- ${item.qty}x ${name} - ${price}`);
+    }
+
+    lines.push('');
+    lines.push(`Total: ${formatPrice(order.total)}`);
+    lines.push('');
+    lines.push('Mis datos:');
+    if (order.customer_name || order.customer_lastname) {
+        lines.push(`- Nombre: ${(order.customer_name ?? '') + ' ' + (order.customer_lastname ?? '')}`.trim());
+    }
+    if (order.customer_phone) {
+        lines.push(`- Teléfono: ${order.customer_phone}`);
+    }
+    if (order.customer_address || order.customer_city) {
+        const addr = [order.customer_address, order.customer_city, order.customer_zip]
+            .filter(Boolean)
+            .join(', ');
+        lines.push(`- Dirección: ${addr}`);
+    }
+    if (order.customer_notes) {
+        lines.push(`- Notas: ${order.customer_notes}`);
+    }
+
+    lines.push('');
+    lines.push('Quedo atento a la confirmación. Gracias!');
+
+    const url = buildWhatsappUrl(whatsappNumber.value, lines.join('\n'));
+    if (url) {
+        // Abrimos en pestaña nueva para no perder la página de "Mis pedidos".
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
 }
 
 async function placeOrder() {
@@ -67,6 +121,10 @@ async function placeOrder() {
 
         const order = await orders.checkout(overrides);
         if (order) {
+            // Abrimos WhatsApp con el resumen ANTES de vaciar el carrito
+            // y redirigir, para que el cliente tenga el flujo natural:
+            // confirma -> WhatsApp -> vuelve a la web a ver su pedido.
+            openWhatsappForOrder(order);
             await cart.fetchCart();
             coupon.remove();
             router.push({ name: 'my-orders', query: { success: '1' } });

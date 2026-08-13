@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\StoreInfoController;
 use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\WishlistController;
 use Illuminate\Http\Request;
@@ -45,6 +46,9 @@ Route::get('/health', fn () => response()->json([
     'app'    => config('app.name'),
     'time'   => now()->toIso8601String(),
 ]));
+
+// Info pública de la tienda (número de WhatsApp, dirección, etc.)
+Route::get('/store-info', [StoreInfoController::class, 'index']);
 
 // ============ Rutas Autenticadas (auth:sanctum) ============
 // Compartidas por compradores y admins: perfil, logout, pedidos propios.

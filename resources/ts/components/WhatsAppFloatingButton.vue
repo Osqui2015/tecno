@@ -1,10 +1,23 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
 import SvgIcon from './SvgIcon.vue';
+import { useStoreInfo, buildWhatsappUrl } from '@/composables/useStoreInfo';
 
-// Número oficial de WhatsApp de la empresa (o link configurable)
-const whatsappNumber = '5493815551234';
-const defaultMessage = encodeURIComponent('Hola Tecno-Rexs! Quisiera consultar por un producto.');
-const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${defaultMessage}`;
+const { whatsappNumber, load } = useStoreInfo();
+
+onMounted(() => {
+    load();
+});
+
+// Fallback por si el endpoint falla: número hardcodeado.
+const FALLBACK_NUMBER = '5493815551234';
+
+const defaultMessage = 'Hola Tecno-Rexs! Quisiera consultar por un producto.';
+
+const whatsappUrl = computed(() => {
+    const number = whatsappNumber.value || FALLBACK_NUMBER;
+    return buildWhatsappUrl(number, defaultMessage) ?? '#';
+});
 </script>
 
 <template>
