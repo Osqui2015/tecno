@@ -24,6 +24,9 @@ function subscribe() {
                 <p class="text-sm text-slate-400 leading-relaxed max-w-xs mt-2">
                     Tu tienda online de tecnología. Productos exclusivos importados de forma directa.
                 </p>
+                <p class="text-xs text-slate-400 font-semibold flex items-center gap-1.5 mt-1">
+                    📍 San Miguel de Tucumán, Argentina
+                </p>
             </div>
 
             <div class="flex flex-col gap-3 text-white">
@@ -54,8 +57,9 @@ function subscribe() {
         </div>
 
         <div class="border-t border-white/10">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-xs text-slate-500">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
                 <p>© {{ year }} Tecno-Rexs. Todos los derechos reservados.</p>
+                <p class="font-semibold text-slate-300">San Miguel de Tucumán, Argentina</p>
             </div>
         </div>
     </footer>
