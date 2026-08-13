@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+# AI assistant tooling (no es parte del proyecto)
+/.agents
+/skills-lock.json

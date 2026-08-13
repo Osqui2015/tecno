@@ -168,6 +168,26 @@ const iconPaths = computed(() => {
                 viewBox: '0 0 24 24',
                 path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />',
             };
+        case 'share':
+            return {
+                viewBox: '0 0 24 24',
+                path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />',
+            };
+        case 'instagram':
+            return {
+                viewBox: '0 0 24 24',
+                path: '<rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" /><circle cx="12" cy="12" r="4.5" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" /><circle cx="17.5" cy="6.5" r="1.3" fill="currentColor" stroke="none" />',
+            };
+        case 'facebook':
+            return {
+                viewBox: '0 0 24 24',
+                path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" />',
+            };
+        case 'twitter':
+            return {
+                viewBox: '0 0 24 24',
+                path: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />',
+            };
         default:
             return {
                 viewBox: '0 0 24 24',

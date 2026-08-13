@@ -10,6 +10,7 @@ import Breadcrumb from '@/components/Breadcrumb.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import ProductCard from '@/components/ProductCard.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import ShareButtons from '@/components/ShareButtons.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -127,6 +128,13 @@ function increment() {
 function decrement() {
     if (qty.value > 1) qty.value--;
 }
+
+// Texto predeterminado que se prellena al compartir por WhatsApp / X
+const shareText = computed(() => {
+    const p = product.value as any;
+    const name = p?.name ? `¡Mirá ${p.name} en Tecno-Rexs!` : '¡Mirá este producto en Tecno-Rexs!';
+    return name;
+});
 </script>
 
 <template>
@@ -175,6 +183,16 @@ function decrement() {
                             <SvgIcon name="box" size="2.35rem" />
                         </div>
                         <span class="text-xs uppercase font-extrabold tracking-wider text-slate-400">Sin imagen</span>
+                    </div>
+
+                    <!-- Botón flotante de compartir sobre la imagen -->
+                    <div class="absolute top-3 right-3 z-10">
+                        <ShareButtons
+                            variant="icon"
+                            align="right"
+                            :title="`${product.name} - Tecno-Rexs`"
+                            :text="shareText"
+                        />
                     </div>
                 </div>
             </div>
@@ -264,6 +282,17 @@ function decrement() {
                         <button disabled class="btn btn-lg btn-primary w-full disabled:opacity-40">
                             Producto agotado
                         </button>
+                    </div>
+
+                    <!-- Compartir producto -->
+                    <div class="pt-2">
+                        <ShareButtons
+                            variant="inline"
+                            align="right"
+                            label="Compartir este producto"
+                            :title="`${product.name} - Tecno-Rexs`"
+                            :text="shareText"
+                        />
                     </div>
                 </div>
 
