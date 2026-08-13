@@ -96,8 +96,10 @@ class OrderController extends Controller
 
         return DB::transaction(function () use ($user, $ship, $data) {
             // 1) Traer items del carrito del user
+            // Filtramos los items con qty=0 (marcados para quitar pero no confirmados)
             $cartItems = CartItem::with('product')
                 ->where('user_id', $user->id)
+                ->where('qty', '>', 0)
                 ->lockForUpdate()
                 ->get();
 

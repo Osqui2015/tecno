@@ -23,7 +23,8 @@ class CartController extends Controller
             ->get();
 
         $total       = $items->sum(fn ($i) => (float) $i->subtotal);
-        $itemsCount  = $items->sum('qty');
+        // Solo cuentan para el contador los items con qty > 0
+        $itemsCount  = $items->where('qty', '>', 0)->sum('qty');
         $minPurchase = (float) config('store.min_purchase');
 
         return response()->json([
@@ -93,8 +94,10 @@ class CartController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
+        // Permitimos qty=0 para que el frontend pueda "marcar para quitar"
+        // (el item sigue en el carrito, sólo se borra al confirmar).
         $data = $request->validate([
-            'qty' => 'required|integer|min:1|max:999',
+            'qty' => 'required|integer|min:0|max:999',
         ]);
 
         $item = CartItem::with('product')
@@ -104,7 +107,7 @@ class CartController extends Controller
 
         $newQty = (int) $data['qty'];
 
-        if ($item->product->stock < $newQty) {
+        if ($newQty > 0 && $item->product->stock < $newQty) {
             throw ValidationException::withMessages([
                 'qty' => ["Stock insuficiente. Disponible: {$item->product->stock}"],
             ]);
@@ -114,7 +117,9 @@ class CartController extends Controller
         $item->save();
 
         return response()->json([
-            'message' => 'Cantidad actualizada',
+            'message' => $newQty === 0
+                ? 'Item marcado para quitar'
+                : 'Cantidad actualizada',
             'item'    => $item,
         ]);
     }

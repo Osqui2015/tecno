@@ -112,13 +112,13 @@ export const useCartStore = defineStore('cart', () => {
     }
 
     async function updateQty(itemId: number, qty: number): Promise<boolean> {
-        if (qty <= 0) {
-            return remove(itemId);
-        }
+        // qty=0 NO borra el item: lo deja "marcado para quitar".
+        // El borrado real sólo ocurre con remove() (botón Quitar).
+        const safeQty = Math.max(0, Math.min(999, Math.floor(qty)));
         loading.value = true;
         error.value = null;
         try {
-            await axios.patch(`/cart/items/${itemId}`, { qty });
+            await axios.patch(`/cart/items/${itemId}`, { qty: safeQty });
             await fetchCart();
             return true;
         } catch (e: any) {

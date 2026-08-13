@@ -13,6 +13,14 @@ const auth = useAuthStore();
 const router = useRouter();
 const imageErrors = ref<Record<number, boolean>>({});
 
+// Confirmación de borrado: cuando el usuario hace click en "Quitar" (qty=0),
+// mostramos "¿Quitar?" y sólo borramos en el segundo click.
+const confirmRemoveId = ref<number | null>(null);
+
+// Buffer local del input numérico para permitir edición fluida sin
+// disparar un request en cada tecla. Se sincroniza al perder foco o al Enter.
+const qtyDrafts = ref<Record<number, string>>({});
+
 onMounted(() => {
     if (auth.isAuthenticated) cart.fetchCart();
 });
@@ -26,10 +34,65 @@ function checkout() {
 }
 
 const formatPrice = (n: number | string) =>
-    '$' + Math.round(Number(n)).toLocaleString('es-AR');
+    '
+ + Math.round(Number(n)).toLocaleString('es-AR');
 
 async function changeQty(itemId: number, currentQty: number, delta: number) {
+    // Si llega a 0 y el usuario toca − otra vez, mostramos "Quitar" (no borramos).
+    // Si pulsa + cuando está en 0, cancelamos el estado de "Quitar" pendiente.
+    if (currentQty <= 0 && delta < 0) {
+        // qty ya está en 0 → mostrar botón Quitar
+        confirmRemoveId.value = itemId;
+        return;
+    }
+    confirmRemoveId.value = null;
     await cart.updateQty(itemId, currentQty + delta);
+}
+
+function getQtyDraft(itemId: number, realQty: number): string {
+    if (qtyDrafts.value[itemId] !== undefined) {
+        return qtyDrafts.value[itemId];
+    }
+    return String(realQty);
+}
+
+function onQtyInput(itemId: number, value: string) {
+    // Sólo dígitos, máx 3 caracteres
+    const sanitized = value.replace(/\D/g, '').slice(0, 3);
+    qtyDrafts.value[itemId] = sanitized;
+}
+
+async function commitQty(itemId: number, realQty: number) {
+    const draft = qtyDrafts.value[itemId];
+    if (draft === undefined) return;
+
+    const parsed = parseInt(draft, 10);
+    if (Number.isNaN(parsed)) {
+        qtyDrafts.value[itemId] = String(realQty);
+        return;
+    }
+
+    const clamped = Math.max(0, Math.min(999, parsed));
+    delete qtyDrafts.value[itemId];
+    confirmRemoveId.value = null;
+
+    if (clamped !== realQty) {
+        await cart.updateQty(itemId, clamped);
+    }
+}
+
+function askRemove(itemId: number) {
+    confirmRemoveId.value = itemId;
+}
+
+function cancelRemove() {
+    confirmRemoveId.value = null;
+}
+
+async function confirmRemove(itemId: number) {
+    confirmRemoveId.value = null;
+    delete qtyDrafts.value[itemId];
+    await cart.remove(itemId);
 }
 </script>
 
@@ -67,6 +130,7 @@ async function changeQty(itemId: number, currentQty: number, delta: number) {
                     v-for="item in cart.items"
                     :key="item.id"
                     class="card p-4 flex items-center gap-4 hover:shadow-md transition-shadow"
+                    :class="item.qty === 0 ? 'opacity-60 ring-1 ring-rose-200/60' : ''"
                 >
                     <router-link
                         :to="{ name: 'product-detail', params: { id: item.product_id } }"
@@ -95,38 +159,107 @@ async function changeQty(itemId: number, currentQty: number, delta: number) {
                         <p class="text-xs text-slate-400 font-semibold mt-1">
                             {{ formatPrice(item.product.final_price ?? item.product.price) }} c/u
                         </p>
+                        <p
+                            v-if="item.qty === 0"
+                            class="text-[10px] text-rose-500 font-bold mt-1 uppercase tracking-wider"
+                        >
+                            Marcado para quitar
+                        </p>
                     </div>
 
-                    <!-- Qty controls -->
-                    <div class="hidden sm:flex items-center bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden">
+                    <!-- Qty controls (oculto en mobile si qty=0, sólo queda Quitar) -->
+                    <div
+                        v-if="item.qty > 0"
+                        class="hidden sm:flex items-center bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden"
+                    >
                         <button
                             @click="changeQty(item.id, item.qty, -1)"
-                            class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer"
+                            :disabled="cart.loading"
+                            class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer disabled:opacity-40"
+                            aria-label="Disminuir cantidad"
                         >
                             <SvgIcon name="minus" size="0.65rem" />
                         </button>
-                        <span class="w-10 text-center font-bold text-sm text-slate-800">
-                            {{ item.qty }}
-                        </span>
+                        <input
+                            type="text"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            :value="getQtyDraft(item.id, item.qty)"
+                            @input="onQtyInput(item.id, ($event.target as HTMLInputElement).value)"
+                            @blur="commitQty(item.id, item.qty)"
+                            @keydown.enter="($event.target as HTMLInputElement).blur()"
+                            :disabled="cart.loading"
+                            class="w-10 h-9 text-center font-bold text-sm text-slate-800 bg-transparent outline-none border-x border-slate-200/50 focus:bg-white focus:ring-2 focus:ring-brand-300"
+                            aria-label="Cantidad"
+                        />
                         <button
                             @click="changeQty(item.id, item.qty, 1)"
-                            class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer"
+                            :disabled="cart.loading"
+                            class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer disabled:opacity-40"
+                            aria-label="Aumentar cantidad"
                         >
                             <SvgIcon name="plus" size="0.65rem" />
                         </button>
                     </div>
 
+                    <!-- Botón Quitar visible sólo cuando qty=0 -->
+                    <button
+                        v-else
+                        @click="confirmRemoveId === item.id ? cancelRemove() : confirmRemove(item.id)"
+                        :disabled="cart.loading"
+                        class="hidden sm:inline-flex items-center gap-1.5 px-3 h-9 text-[11px] font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer disabled:opacity-50"
+                        :class="confirmRemoveId === item.id
+                            ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700'
+                            : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'"
+                    >
+                        <SvgIcon name="trash" size="0.75rem" />
+                        <span>{{ confirmRemoveId === item.id ? 'Confirmar' : 'Quitar' }}</span>
+                    </button>
+
                     <!-- Subtotal -->
                     <div class="text-right flex-shrink-0 pl-2">
-                        <p class="font-black text-slate-800 text-base">
+                        <p
+                            class="font-black text-base"
+                            :class="item.qty === 0 ? 'text-slate-400 line-through' : 'text-slate-800'"
+                        >
                             {{ formatPrice(Number(item.subtotal || (Number(item.product.final_price ?? item.product.price) * item.qty))) }}
                         </p>
                         <button
-                            @click="cart.remove(item.id)"
-                            class="inline-flex items-center gap-1 text-[11px] text-rose-500 hover:text-rose-700 mt-1.5 font-bold transition-colors cursor-pointer"
+                            v-if="item.qty > 0"
+                            @click="askRemove(item.id)"
+                            class="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-600 mt-1.5 font-bold transition-colors cursor-pointer"
                         >
-                            <SvgIcon name="trash" size="0.75rem" />
+                            <SvgIcon name="trash" size="0.7rem" />
                             <span>Eliminar</span>
+                        </button>
+                    </div>
+
+                    <!-- Mobile: controles siempre accesibles -->
+                    <div class="flex sm:hidden w-full mt-2 items-center justify-between gap-2">
+                        <div class="flex items-center bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden">
+                            <button
+                                @click="changeQty(item.id, item.qty, -1)"
+                                class="w-8 h-8 flex items-center justify-center"
+                                aria-label="Disminuir cantidad"
+                            >
+                                <SvgIcon name="minus" size="0.6rem" />
+                            </button>
+                            <span class="w-8 text-center font-bold text-sm">
+                                {{ item.qty }}
+                            </span>
+                            <button
+                                @click="changeQty(item.id, item.qty, 1)"
+                                class="w-8 h-8 flex items-center justify-center"
+                                aria-label="Aumentar cantidad"
+                            >
+                                <SvgIcon name="plus" size="0.6rem" />
+                            </button>
+                        </div>
+                        <button
+                            @click="item.qty > 0 ? askRemove(item.id) : (confirmRemoveId === item.id ? cancelRemove() : confirmRemove(item.id))"
+                            class="text-[11px] font-bold text-rose-600 px-3 py-1.5 rounded-lg bg-rose-50"
+                        >
+                            {{ confirmRemoveId === item.id ? 'Confirmar' : (item.qty > 0 ? 'Eliminar' : 'Quitar') }}
                         </button>
                     </div>
                 </article>
