@@ -23,9 +23,13 @@ Route::middleware('throttle:auth')->group(function () {
     Route::post('/auth/2fa-challenge', [TwoFactorController::class, 'challenge']);
 });
 
+Route::get('/products/search', [ProductController::class, 'search']);
+// Alias deprecado (typo histórico). Mantener por retrocompat con integraciones viejas.
 Route::get('/products/searchproduc', [ProductController::class, 'search']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show'])->whereNumber('id');
+Route::get('/products/{id}/related', [ProductController::class, 'related'])->whereNumber('id');
+Route::post('/compare', [ProductController::class, 'compare']);
 
 // Reviews públicas (lectura)
 Route::get('/products/{product}/reviews', [\App\Http\Controllers\Api\ReviewController::class, 'index'])->whereNumber('product');
@@ -126,6 +130,14 @@ Route::middleware(['auth:sanctum', 'admin', 'throttle:admin-write'])->prefix('ad
     // Audit log
     Route::get('/audit-logs',            [\App\Http\Controllers\Admin\AuditLogController::class, 'index']);
 
-    // Stats
+    // Stats (sub-endpoints cacheados independientemente)
     Route::get('/stats',                 [\App\Http\Controllers\Admin\AdminStatsController::class, 'index']);
+    Route::get('/stats/kpis',            [\App\Http\Controllers\Admin\AdminStatsController::class, 'kpis']);
+    Route::get('/stats/sales-chart',     [\App\Http\Controllers\Admin\AdminStatsController::class, 'salesChart']);
+    Route::get('/stats/top-products',    [\App\Http\Controllers\Admin\AdminStatsController::class, 'topProducts']);
+    Route::get('/stats/recent-orders',   [\App\Http\Controllers\Admin\AdminStatsController::class, 'recentOrders']);
+    Route::get('/stats/categories-sales',[\App\Http\Controllers\Admin\AdminStatsController::class, 'categoriesSales']);
+
+    // Reporte de márgenes
+    Route::get('/products/margins',      [\App\Http\Controllers\Admin\AdminStatsController::class, 'margins']);
 });

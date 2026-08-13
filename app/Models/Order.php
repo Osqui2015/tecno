@@ -18,7 +18,6 @@ class Order extends Model
     public const STATUS_SHIPPED   = 'shipped';    // despachado
     public const STATUS_DELIVERED = 'delivered';  // entregado
     public const STATUS_CANCELLED = 'cancelled';  // cancelado (por admin o comprador)
-    public const STATUS_MODIFIED  = 'modified';   // admin lo modificó (avisa al user)
 
     public const STATUSES = [
         self::STATUS_PENDING,
@@ -27,7 +26,6 @@ class Order extends Model
         self::STATUS_SHIPPED,
         self::STATUS_DELIVERED,
         self::STATUS_CANCELLED,
-        self::STATUS_MODIFIED,
     ];
 
     /**

@@ -260,6 +260,16 @@ class OrderController extends Controller
             'auto_send'              => 'sometimes|boolean',
         ]);
 
+        // Validación de coherencia: si available=true, qty (si se envía) debe ser >= 1
+        foreach ($data['items'] as $row) {
+            if ($row['available'] === true && isset($row['qty']) && $row['qty'] !== null && (int) $row['qty'] < 1) {
+                throw ValidationException::withMessages([
+                    'items' => "Item {$row['item_id']}: si marcás 'disponible', la cantidad debe ser al menos 1. " .
+                               "Si no hay unidades disponibles, marcalo como 'no disponible' (available: false).",
+                ]);
+            }
+        }
+
         $itemIds = collect($data['items'])->pluck('item_id')->all();
         $orderItemIds = $order->items->pluck('id')->all();
 

@@ -26,22 +26,17 @@ onMounted(async () => {
 });
 
 async function handleLogout() {
-    // 1. Vaciar el carrito (backend + frontend) ANTES del logout
-    //    para no perder el token antes de la request.
-    try {
-        await cart.clear();
-    } catch {
-        // si falla (ej: token ya expiró), seguimos igual
-        cart.clearLocal();
-    }
+    // El carrito es propiedad del usuario y se persiste en backend por user_id.
+    // NO se borra en logout: si el usuario cierra sesión y vuelve a entrar,
+    // sus items siguen ahí. (Antes se vaciaba, lo cual era agresivo.)
 
-    // 2. Cerrar sesión en el backend y limpiar token/user locales.
+    // 1. Cerrar sesión en el backend y limpiar token/user locales.
     await auth.logout();
 
-    // 3. Cerrar el menú mobile si estaba abierto.
+    // 2. Cerrar el menú mobile si estaba abierto.
     mobileOpen.value = false;
 
-    // 4. Redirigir al home. Usamos replace para que "atrás" no vuelva al perfil.
+    // 3. Redirigir al home. Usamos replace para que "atrás" no vuelva al perfil.
     await router.replace({ name: 'home' });
 }
 

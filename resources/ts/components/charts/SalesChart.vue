@@ -47,18 +47,18 @@ const chartPoints = computed(() => {
     <div class="card p-5 space-y-4">
         <div class="flex items-center justify-between">
             <div>
-                <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm">Tendencia de Ventas (Últimos 30 días)</h3>
+                <h3 class="font-bold text-zinc-800 dark:text-slate-100 text-sm">Tendencia de Ventas (Últimos 30 días)</h3>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Ingresos diarios acumulados</p>
             </div>
             <div class="text-right" v-if="chartPoints.points.length > 0">
-                <span class="text-xs text-slate-400">Pico máximo:</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">Pico máximo:</span>
                 <span class="block text-sm font-bold text-emerald-600 dark:text-emerald-400">
                     {{ formatCurrency(chartPoints.maxRevenue) }}
                 </span>
             </div>
         </div>
 
-        <div v-if="data.length === 0" class="h-44 flex items-center justify-center text-xs text-slate-400">
+        <div v-if="data.length === 0" class="h-44 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
             No hay datos de ventas registrados en este período.
         </div>
 
@@ -71,10 +71,10 @@ const chartPoints = computed(() => {
                     </linearGradient>
                 </defs>
 
-                <!-- Grid de fondo -->
-                <line x1="20" y1="20" x2="580" y2="20" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
-                <line x1="20" y1="90" x2="580" y2="90" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
-                <line x1="20" y1="160" x2="580" y2="160" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-width="1" />
+                <!-- Grid de fondo: slate-200 en light, slate-800 en dark (suficiente contraste) -->
+                <line x1="20" y1="20" x2="580" y2="20" stroke="currentColor" class="text-slate-200 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
+                <line x1="20" y1="90" x2="580" y2="90" stroke="currentColor" class="text-slate-200 dark:text-slate-800" stroke-width="1" stroke-dasharray="4" />
+                <line x1="20" y1="160" x2="580" y2="160" stroke="currentColor" class="text-slate-200 dark:text-slate-800" stroke-width="1" />
 
                 <!-- Área sombreada -->
                 <path :d="chartPoints.areaPath" fill="url(#chartGradient)" />
@@ -96,7 +96,7 @@ const chartPoints = computed(() => {
             </svg>
 
             <!-- Fechas eje X -->
-            <div class="flex justify-between text-[10px] text-slate-400 pt-2 px-1">
+            <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-2 px-1">
                 <span>{{ data[0]?.date }}</span>
                 <span>{{ data[Math.floor(data.length / 2)]?.date }}</span>
                 <span>{{ data[data.length - 1]?.date }}</span>

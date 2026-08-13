@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\ScrapeProductsJob;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\TucScraperService;
@@ -29,7 +30,8 @@ class ScrapeTucProducts extends Command
         {--dry-run         : Simular sin guardar en la base de datos}
         {--fresh           : Vaciar productos de Tuc antes de empezar}
         {--category=       : Filtrar productos por nombre de categoría externa}
-        {--no-hide-missing : NO ocultar productos que no aparezcan en el scraping}';
+        {--no-hide-missing : NO ocultar productos que no aparezcan en el scraping}
+        {--queue           : Despachar el scrape como Job en background (no bloquea la consola)}';
 
     protected $description = 'Scrapea productos desde tustecnologiastuc.com y los guarda/actualiza en la DB';
 
@@ -38,6 +40,28 @@ class ScrapeTucProducts extends Command
     public function handle(TucScraperService $scraper): int
     {
         $this->scraper = $scraper;
+
+        // Si se pasa --queue, despachamos el Job en background y salimos.
+        if ($this->option('queue')) {
+            if ($this->option('dry-run')) {
+                $this->error('❌ --dry-run no es compatible con --queue');
+                return self::FAILURE;
+            }
+            $pages = $this->option('pages') !== null && $this->option('pages') !== ''
+                ? (int) $this->option('pages')
+                : null;
+            ScrapeProductsJob::dispatch(
+                origin: 'tuc',
+                scraperClass: TucScraperService::class,
+                maxPages: $pages,
+                delaySeconds: (int) $this->option('delay'),
+                fresh: (bool) $this->option('fresh'),
+                hideMissing: ! $this->option('no-hide-missing'),
+            );
+            $this->info('✅ Job despachado a la cola. Procesalo con:');
+            $this->line('   php artisan queue:work --queue=default');
+            return self::SUCCESS;
+        }
 
         $this->newLine();
         $this->info('╔══════════════════════════════════════════╗');
@@ -352,11 +376,17 @@ class ScrapeTucProducts extends Command
                 if (isset($existingByExt[$p['external_id']])) {
                     $product = Product::find($existingByExt[$p['external_id']]);
                     if ($product) {
+                        $stockBefore = (int) $product->stock;
                         $product->fill($payload)->save();
+                        $stockAfter = (int) $product->fresh()->stock;
+                        if ($stockBefore !== $stockAfter) {
+                            $product->recordStockChange('scraper', 'tuc:scrape');
+                        }
                     }
                     $stats['updated']++;
                 } else {
-                    Product::create(array_merge(['external_id' => $p['external_id']], $payload));
+                    $newProduct = Product::create(array_merge(['external_id' => $p['external_id']], $payload));
+                    $newProduct->recordStockChange('scraper', 'tuc:scrape:new');
                     $stats['created']++;
                 }
 

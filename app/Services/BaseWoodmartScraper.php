@@ -156,6 +156,14 @@ abstract class BaseWoodmartScraper
                 if ($page === 1) {
                     break;
                 }
+                // Si no es la primera, seguimos. Respetamos el delay para no martillar
+                // al proveedor si está caído.
+                $url = $result['nextPage'] ?? null;
+                $page++;
+                if ($url && $delaySeconds > 0) {
+                    sleep($delaySeconds);
+                }
+                continue;
             }
 
             if ($maxPages !== null && $page >= $maxPages) {

@@ -30,12 +30,14 @@ class UserController extends Controller
             });
         }
 
+        // Filtro por role: ahora filtra por relación Spatie.
         if ($request->filled('role')) {
-            $query->where('role', $request->string('role')->toString());
+            $role = $request->string('role')->toString();
+            $query->whereHas('roles', fn ($q) => $q->where('name', $role));
         }
 
         $perPage = min($request->integer('per_page', 15), 100);
-        $users = $query->orderByDesc('created_at')->paginate($perPage);
+        $users = $query->with('roles')->orderByDesc('created_at')->paginate($perPage);
 
         return response()->json($users);
     }
@@ -60,9 +62,12 @@ class UserController extends Controller
             'document_number' => 'nullable|string|max:50',
         ]);
 
+        $role = $validated['role'];
+        unset($validated['role']);
         $validated['password'] = Hash::make($validated['password']);
 
         $user = User::create($validated);
+        $user->syncRoles([$role]);
 
         // Audit Log
         AuditLog::create([
@@ -72,13 +77,13 @@ class UserController extends Controller
             'subject_id'   => $user->id,
             'actor_type'   => User::class,
             'actor_id'     => $request->user()?->id,
-            'meta'         => ['role' => $user->role],
+            'meta'         => ['role' => $role],
             'ip_address'   => $request->ip(),
         ]);
 
         return response()->json([
             'message' => 'Perfil creado exitosamente',
-            'user'    => $user,
+            'user'    => $user->load('roles'),
         ], 201);
     }
 
@@ -90,7 +95,7 @@ class UserController extends Controller
     {
         $user = User::withCount('orders')->with(['orders' => function ($q) {
             $q->latest()->limit(10);
-        }])->findOrFail($id);
+        }, 'roles'])->findOrFail($id);
 
         return response()->json($user);
     }
@@ -117,6 +122,9 @@ class UserController extends Controller
             'document_number' => 'nullable|string|max:50',
         ]);
 
+        $newRole = $validated['role'] ?? null;
+        unset($validated['role']);
+
         if (! empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         } else {
@@ -124,6 +132,9 @@ class UserController extends Controller
         }
 
         $user->update($validated);
+        if ($newRole !== null) {
+            $user->syncRoles([$newRole]);
+        }
 
         // Audit Log
         AuditLog::create([
@@ -138,7 +149,7 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Perfil actualizado exitosamente',
-            'user'    => $user->fresh(),
+            'user'    => $user->fresh()->load('roles'),
         ]);
     }
 

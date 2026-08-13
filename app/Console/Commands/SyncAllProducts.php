@@ -27,7 +27,8 @@ class SyncAllProducts extends Command
         {--dry-run           : Simular sin guardar en la base de datos}
         {--fresh             : Vaciar productos externos antes de empezar}
         {--category=         : Filtrar productos por nombre de categoría externa}
-        {--no-hide-missing   : NO ocultar productos que no aparezcan en el scraping}';
+        {--no-hide-missing   : NO ocultar productos que no aparezcan en el scraping}
+        {--queue             : Despachar ambos scrapes como Jobs en background}';
 
     protected $description = 'Scrapea Daz y Tustecnologia, luego reindexa Scout';
 
@@ -36,6 +37,47 @@ class SyncAllProducts extends Command
         $skipDaz    = (bool) $this->option('skip-daz');
         $skipTuc    = (bool) $this->option('skip-tuc');
         $noReindex  = (bool) $this->option('no-reindex');
+        $useQueue   = (bool) $this->option('queue');
+
+        // Si se pasa --queue, despachamos los Jobs y salimos.
+        if ($useQueue) {
+            if ($this->option('dry-run')) {
+                $this->error('❌ --dry-run no es compatible con --queue');
+                return self::FAILURE;
+            }
+            $opts = $this->buildOptions();
+            $maxPages    = isset($opts['--pages']) ? (int) $opts['--pages'] : null;
+            $delaySec    = isset($opts['--delay']) ? (int) $opts['--delay'] : 1;
+            $isFresh     = isset($opts['--fresh']);
+            $hideMissing = ! isset($opts['--no-hide-missing']);
+            $jobs = [];
+            if (! $skipDaz) {
+                $jobs[] = \App\Jobs\ScrapeProductsJob::dispatch(
+                    'daz',
+                    \App\Services\DazScraperService::class,
+                    $maxPages,
+                    $delaySec,
+                    $isFresh,
+                    $hideMissing,
+                );
+            }
+            if (! $skipTuc) {
+                $jobs[] = \App\Jobs\ScrapeProductsJob::dispatch(
+                    'tuc',
+                    \App\Services\TucScraperService::class,
+                    $maxPages,
+                    $delaySec,
+                    $isFresh,
+                    $hideMissing,
+                );
+            }
+            if (! $noReindex) {
+                \App\Jobs\ReindexScoutJob::dispatch();
+            }
+            $this->info('✅ ' . count($jobs) . ' job(s) despachado(s). Procesalos con:');
+            $this->line('   php artisan queue:work --queue=default');
+            return self::SUCCESS;
+        }
 
         $this->newLine();
         $this->info('╔══════════════════════════════════════════╗');
@@ -109,25 +151,31 @@ class SyncAllProducts extends Command
 
     /**
      * Construye el array de opciones para pasar a los scrapers hijos.
+     * Normaliza valores vacíos a null para no propagar strings vacíos.
      */
     private function buildOptions(): array
     {
         $opts = [];
 
-        if ($this->option('pages') !== null && $this->option('pages') !== '') {
-            $opts['--pages'] = $this->option('pages');
+        $pages = $this->option('pages');
+        if ($pages !== null && $pages !== '' && (int) $pages > 0) {
+            $opts['--pages'] = (int) $pages;
         }
-        if ($this->option('delay') !== null) {
-            $opts['--delay'] = $this->option('delay');
+
+        $delay = $this->option('delay');
+        if ($delay !== null && $delay !== '' && (int) $delay >= 0) {
+            $opts['--delay'] = (int) $delay;
         }
+
         if ($this->option('dry-run')) {
             $opts['--dry-run'] = true;
         }
         if ($this->option('fresh')) {
             $opts['--fresh'] = true;
         }
-        if ($this->option('category')) {
-            $opts['--category'] = $this->option('category');
+        $category = $this->option('category');
+        if ($category !== null && $category !== '') {
+            $opts['--category'] = $category;
         }
         if ($this->option('no-hide-missing')) {
             $opts['--no-hide-missing'] = true;

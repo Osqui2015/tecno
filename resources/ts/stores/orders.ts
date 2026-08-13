@@ -24,7 +24,7 @@ export interface Order {
     id: number;
     user_id: number;
     total: number | string;
-    status: 'pending' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled' | 'modified';
+    status: 'pending' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
     shipping_address?: string;
     customer_name?: string;
     customer_lastname?: string;

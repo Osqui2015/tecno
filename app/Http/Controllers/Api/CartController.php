@@ -17,7 +17,7 @@ class CartController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $items = CartItem::with('product')
+        $items = CartItem::with(['product.category'])
             ->where('user_id', $request->user()->id)
             ->orderBy('updated_at', 'desc')
             ->get();

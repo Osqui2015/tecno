@@ -15,7 +15,7 @@ class WishlistController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $items = WishlistItem::with('product')
+        $items = WishlistItem::with(['product.category'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->get();

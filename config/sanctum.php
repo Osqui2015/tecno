@@ -5,6 +5,14 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
+// En producción priorizamos SANCTUM_PROD_DOMAINS; en dev/staging usamos
+// SANCTUM_STATEFUL_DOMAINS. Si ninguna está seteada, caemos a defaults seguros
+// de Sanctum. El `env()` doble es la forma estándar en config files porque
+// `app()->environment()` aún no está disponible en este punto del bootstrap.
+$statefulDomains = env('APP_ENV') === 'production'
+    ? env('SANCTUM_PROD_DOMAINS', env('SANCTUM_STATEFUL_DOMAINS'))
+    : env('SANCTUM_STATEFUL_DOMAINS', env('SANCTUM_PROD_DOMAINS'));
+
 return [
 
     /*
@@ -18,12 +26,11 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
+    'stateful' => array_values(array_filter(explode(',', $statefulDomains ?? sprintf(
         '%s%s',
         'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
         Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
-    ))),
+    )))),
 
     /*
     |--------------------------------------------------------------------------

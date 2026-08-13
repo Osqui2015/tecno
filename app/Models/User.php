@@ -26,6 +26,11 @@ class User extends Authenticatable
     ];
 
     /**
+     * Accessors que se incluyen automáticamente al serializar a JSON/array.
+     */
+    protected $appends = ['role', 'full_name', 'full_address', 'has_complete_profile'];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -35,7 +40,6 @@ class User extends Authenticatable
         'lastname',
         'email',
         'password',
-        'role',
         'phone',
         'address',
         'city',
@@ -67,25 +71,51 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at'      => 'datetime',
-            'password'               => 'hashed',
-            'role'                   => 'string',
+            'email_verified_at'       => 'datetime',
+            'password'                => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
     // ============================================================
-    //  Helpers de rol
+    //  Helpers de rol (ahora vía Spatie)
     // ============================================================
+
+    /**
+     * Devuelve el "role" principal del usuario (para compatibilidad con frontend
+     * que espera un string simple). Si tiene varios, devuelve el más alto.
+     * Si no tiene ninguno, devuelve 'guest'.
+     */
+    public function getRoleAttribute(): string
+    {
+        $role = $this->roles->sortByDesc(fn ($r) => match ($r->name) {
+            'super-admin'    => 100,
+            'admin'          => 90,
+            'admin-pedidos'  => 80,
+            'admin-productos'=> 80,
+            'comprador'      => 10,
+            default          => 0,
+        })->first();
+
+        return $role?->name ?? 'guest';
+    }
 
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->hasRole(['super-admin', 'admin', 'admin-pedidos', 'admin-productos']);
     }
 
     public function isComprador(): bool
     {
-        return $this->role === self::ROLE_COMPRADOR;
+        return $this->hasRole(self::ROLE_COMPRADOR);
+    }
+
+    /**
+     * Accessor que Eloquent mapea desde hasCompleteProfile().
+     */
+    public function getHasCompleteProfileAttribute(): bool
+    {
+        return $this->hasCompleteProfile();
     }
 
     /**

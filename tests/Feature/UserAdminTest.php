@@ -86,7 +86,11 @@ class UserAdminTest extends TestCase
             ->assertJsonPath('user.name', 'Nombre Modificado')
             ->assertJsonPath('user.role', User::ROLE_ADMIN);
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'role' => User::ROLE_ADMIN]);
+        // El role ahora vive en la tabla Spatie (model_has_roles), no en users.role
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id'   => $user->id,
+            'model_type' => User::class,
+        ]);
     }
 
     #[Test]

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Product;
+use App\Support\CacheHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,35 @@ class ProductController extends Controller
             $query->where('stock', '>=', $request->integer('min_stock'));
         }
 
+        // Rango de precio (en pesos argentinos)
+        if ($request->filled('price_min')) {
+            $query->where('price', '>=', $request->float('price_min'));
+        }
+        if ($request->filled('price_max')) {
+            $query->where('price', '<=', $request->float('price_max'));
+        }
+
+        // Filtrar por marca (además de source/category)
+        if ($request->filled('brand')) {
+            $query->where('brand', $request->string('brand')->toString());
+        }
+
+        // Filtrar por rango de fechas (última actualización)
+        if ($request->filled('updated_from')) {
+            $query->where('updated_at', '>=', $request->date('updated_from'));
+        }
+        if ($request->filled('updated_to')) {
+            $query->where('updated_at', '<=', $request->date('updated_to'));
+        }
+
+        // Filtrar por margen (markup_percent)
+        if ($request->filled('markup_min')) {
+            $query->where('markup_percent', '>=', $request->float('markup_min'));
+        }
+        if ($request->filled('markup_max')) {
+            $query->where('markup_percent', '<=', $request->float('markup_max'));
+        }
+
         if ($request->filled('search')) {
             $query->search($request->string('search')->toString());
         }
@@ -86,6 +116,10 @@ class ProductController extends Controller
         $data['slug'] = Str::slug($data['name']) . '-' . Str::random(4);
 
         $product = Product::create($data);
+
+        // El observer del modelo ya invalida el cache, pero lo dejamos explícito
+        // para no depender del orden de eventos.
+        CacheHelper::flush(['products:public']);
 
         return response()->json($product->load('category'), 201);
     }
@@ -127,6 +161,8 @@ class ProductController extends Controller
 
         $product->update($data);
 
+        CacheHelper::flush(['products:public']);
+
         $after = [
             'price'          => (float) $product->fresh()->price,
             'markup_percent' => (float) $product->fresh()->markup_percent,
@@ -163,6 +199,8 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $product->delete();
+
+        CacheHelper::flush(['products:public']);
 
         return response()->json(['message' => 'Producto eliminado']);
     }
@@ -210,6 +248,9 @@ class ProductController extends Controller
         $count = DB::transaction(function () use ($query, $data) {
             return $query->update(['markup_percent' => $data['percent']]);
         });
+
+        // Invalidar cache público del catálogo (final_price depende del markup).
+        CacheHelper::flush(['products:public']);
 
         // Audit log del cambio global
         AuditLog::create([
@@ -319,26 +360,45 @@ class ProductController extends Controller
             return strtolower(trim($h));
         }, $headers);
 
+        // Cache de categorías válidas para validar id sin pegar a DB por fila
+        $validCategoryIds = \App\Models\Category::pluck('id')->all();
+
         $createdCount = 0;
         $updatedCount = 0;
         $errorCount = 0;
+        $errorSamples = [];
 
-        DB::transaction(function () use ($handle, $cleanHeaders, &$createdCount, &$updatedCount, &$errorCount) {
+        DB::transaction(function () use ($handle, $cleanHeaders, $validCategoryIds, &$createdCount, &$updatedCount, &$errorCount, &$errorSamples) {
+            $lineNumber = 1; // header
             while (($row = fgetcsv($handle, 2000, ',')) !== false) {
-                if (count($row) < 2) continue;
+                $lineNumber++;
+                if (count($row) < 2) {
+                    $errorCount++;
+                    $errorSamples[] = "Línea {$lineNumber}: fila vacía";
+                    continue;
+                }
 
                 $data = array_combine(array_slice($cleanHeaders, 0, count($row)), $row);
 
                 $sku   = trim($data['sku'] ?? $data['code'] ?? '');
                 $name  = trim($data['nombre'] ?? $data['name'] ?? '');
-                $price = numeric_or_null($data['precio base'] ?? $data['price'] ?? null);
+                $price = $this->numericOrNull($data['precio base'] ?? $data['price'] ?? null);
                 $stock = isset($data['stock']) ? (int) $data['stock'] : 0;
                 $brand = trim($data['marca'] ?? $data['brand'] ?? '');
-                $catId = isset($data['id categoria']) ? (int) $data['id categoria'] : (int) ($data['category_id'] ?? 1);
+                $rawCatId = $data['id categoria'] ?? $data['category_id'] ?? null;
+                $catId = $rawCatId !== null && $rawCatId !== '' ? (int) $rawCatId : null;
                 $active = isset($data['activo']) ? in_array(strtoupper(trim($data['activo'])), ['SI', 'YES', '1', 'TRUE']) : true;
 
                 if (empty($name) && empty($sku)) {
                     $errorCount++;
+                    $errorSamples[] = "Línea {$lineNumber}: falta nombre y SKU";
+                    continue;
+                }
+
+                // Validar categoría si se proveyó
+                if ($catId !== null && ! in_array($catId, $validCategoryIds, true)) {
+                    $errorCount++;
+                    $errorSamples[] = "Línea {$lineNumber}: categoría {$catId} no existe";
                     continue;
                 }
 
@@ -356,7 +416,7 @@ class ProductController extends Controller
                         'price'       => $price ?? $product->price,
                         'stock'       => $stock,
                         'brand'       => $brand ?: $product->brand,
-                        'category_id' => $catId ?: $product->category_id,
+                        'category_id' => $catId ?? $product->category_id,
                         'active'      => $active,
                     ], fn ($v) => $v !== null));
                     $updatedCount++;
@@ -368,7 +428,7 @@ class ProductController extends Controller
                         'price'       => $price ?? 0,
                         'stock'       => $stock,
                         'brand'       => $brand ?: null,
-                        'category_id' => $catId ?: 1,
+                        'category_id' => $catId ?? 1, // default solo al crear; en update ya validamos arriba
                         'active'      => $active,
                     ]);
                     $createdCount++;
@@ -378,18 +438,29 @@ class ProductController extends Controller
 
         fclose($handle);
 
+        // Mostrar como mucho 10 muestras de errores para no saturar la respuesta
+        $errorSamples = array_slice($errorSamples, 0, 10);
+
+        // Invalidar cache público: el import cambió muchos productos.
+        CacheHelper::flush(['products:public']);
+
         return response()->json([
             'message'  => "Importación completada: {$createdCount} creados, {$updatedCount} actualizados, {$errorCount} omitidos.",
             'created'  => $createdCount,
             'updated'  => $updatedCount,
             'errors'   => $errorCount,
+            'error_samples' => $errorSamples,
         ]);
     }
-}
 
-function numeric_or_null($val): ?float
-{
-    if ($val === null || $val === '') return null;
-    $val = str_replace(['$', ' '], '', (string) $val);
-    return is_numeric($val) ? (float) $val : null;
+    /**
+     * Convierte un valor de celda CSV a float, o null si no es numérico.
+     * Acepta formatos con $, espacios, y separadores AR/US.
+     */
+    private function numericOrNull($val): ?float
+    {
+        if ($val === null || $val === '') return null;
+        $val = str_replace(['$', ' '], '', (string) $val);
+        return is_numeric($val) ? (float) $val : null;
+    }
 }

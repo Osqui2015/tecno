@@ -6,6 +6,21 @@
 @source '../../storage/framework/views/*.php';
 
 /* ===========================================================
+   DARK MODE — Custom variant
+   ===========================================================
+   Por default, Tailwind v4 hace que `dark:text-slate-100` se active
+   cuando el SISTEMA OPERATIVO está en dark mode
+   (`@media (prefers-color-scheme: dark)`).
+
+   El proyecto usa un toggle manual (`themeStore` agrega la clase
+   `.dark` al `<html>`). Sin este custom variant, los `dark:*` se
+   ignoran y los textos `dark:text-slate-100` (casi blancos) se
+   renderizan también en modo light, quedando invisibles sobre el
+   fondo blanco.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===========================================================
    THEME — Custom CSS Variables (Tailwind 4)
    =========================================================== */
 @theme {
@@ -44,7 +59,9 @@ html, body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    color: #0b1c30;
+    /* Color de letra base en light: gris oscuro NEUTRO (sin tinte azul de slate-).
+       Antes era #0b1c30 que se percibía muy azulado. */
+    color: #1f2937;
     background: #f8f9ff;
     transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -156,7 +173,7 @@ a {
 .btn-secondary:hover:not(:disabled) {
     background-color: #f8fafc;
     border-color: #cbd5e1;
-    color: #0f172a;
+    color: #1f2937;
     transform: translateY(-1px);
 }
 
@@ -192,7 +209,7 @@ a {
     border: 1px solid #e2e8f0;
     border-radius: 0.875rem;
     font-size: 0.9rem;
-    color: #0f172a;
+    color: #1f2937;
     transition: all 0.2s ease;
     font-family: inherit;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
@@ -269,7 +286,7 @@ a {
     font-family: var(--font-heading);
     font-size: 1.5rem;
     font-weight: 800;
-    color: #0f172a;
+    color: #1f2937;
     position: relative;
     display: inline-block;
     letter-spacing: -0.02em;

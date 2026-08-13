@@ -37,7 +37,6 @@ const STATUSES = [
     { v: 'preparing', t: 'Preparando' },
     { v: 'shipped',   t: 'En camino' },
     { v: 'delivered', t: 'Entregado' },
-    { v: 'modified',  t: 'Modificado' },
     { v: 'cancelled', t: 'Cancelado' },
 ];
 
@@ -219,7 +218,7 @@ function closeModal() {
                 Pedido #{{ id }}
             </h2>
             <span v-if="admin.currentOrder" class="chip" :class="{
-                'chip-warning': admin.currentOrder.status === 'pending' || admin.currentOrder.status === 'modified',
+                'chip-warning': admin.currentOrder.status === 'pending',
                 'chip-info': admin.currentOrder.status === 'confirmed' || admin.currentOrder.status === 'preparing' || admin.currentOrder.status === 'shipped',
                 'chip-success': admin.currentOrder.status === 'delivered',
                 'chip-danger': admin.currentOrder.status === 'cancelled',
@@ -415,7 +414,7 @@ function closeModal() {
                         </div>
                         <div v-if="admin.currentOrder.customer_notes" class="sm:col-span-2">
                             <p class="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 mb-1">Notas del cliente</p>
-                            <p class="text-sm text-slate-700 italic bg-slate-50 rounded-lg p-3">
+                            <p class="text-sm text-slate-700 italic bg-slate-50 rounded-lg p-3 whitespace-pre-line">
                                 {{ admin.currentOrder.customer_notes }}
                             </p>
                         </div>

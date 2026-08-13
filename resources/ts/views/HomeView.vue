@@ -19,11 +19,22 @@ onMounted(() => {
     }
 });
 
-// Best products (corresponds to "Best courses" in sketch)
-const bestSellers = computed(() => store.products.slice(0, 5));
+// Destacados: productos con stock disponible, ordenados por más recientes.
+// Antes se mostraban "Best Sellers" y "Top Articles" que eran slices arbitrarios
+// del array (no eran realmente los más vendidos). Ahora se muestran como
+// "Destacados" y "Recientes" sin mentir al usuario.
+const bestSellers = computed(() =>
+    store.products
+        .filter((p) => p.stock > 0)
+        .slice(0, 5)
+);
 
-// Top products / new releases (corresponds to "Top Articles" in sketch)
-const topArticles = computed(() => store.products.slice(5, 15));
+// "Recientes": últimos actualizados que tengan stock. No pretende ser top ventas.
+const topArticles = computed(() =>
+    store.products
+        .filter((p) => p.stock > 0)
+        .slice(5, 15)
+);
 
 // Productos extra para mostrar abajo (después de bestSellers + topArticles).
 // A medida que el usuario hace clic en "Cargar más" en el Home, esta lista crece.
@@ -314,7 +325,7 @@ const formatPrice = (n: number) => {
             </div>
         </section>
 
-        <!-- 4. TOP ARTICLES (Matches sketch: "Top Articles" grid) -->
+        <!-- 4. ÚLTIMAS NOVEDADES -->
         <section class="animate-slide-up">
             <div class="mb-6">
                 <h2 class="section-title">Últimas Novedades</h2>

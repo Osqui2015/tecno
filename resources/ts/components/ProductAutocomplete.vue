@@ -114,7 +114,14 @@ function formatPrice(n: number): string {
 
 function highlight(text: string, q: string): string {
     if (!q.trim()) return text;
-    const safe = text.replace(/</g, '&lt;');
+    // Escapamos los caracteres que rompen contexto HTML. Vue igual protege con
+    // v-html, pero por las dudas sanitizamos el texto antes de envolverlo en <mark>.
+    const safe = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     const re = new RegExp(`(${q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
     return safe.replace(re, '<mark class="bg-amber-100 text-slate-900 rounded px-0.5">$1</mark>');
 }

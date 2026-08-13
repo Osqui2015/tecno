@@ -77,6 +77,51 @@ class Product extends Model
                 $product->active = false;
             }
         });
+
+        // Registrar cambios de stock en el historial (solo si cambia y NO viene
+        // del scraper, que registra su propio cambio con source='scraper').
+        static::updated(function (Product $product) {
+            if (! $product->wasChanged('stock')) {
+                return;
+            }
+            if (app()->bound('scrape_in_progress') && app('scrape_in_progress')) {
+                return;
+            }
+            $actorId = auth()->id();
+            $product->recordStockChange('admin', null, $actorId);
+        });
+
+        // Invalidar el cache público del catálogo cuando se crea/actualiza/borra.
+        // Usamos el helper que cae a flush total si el driver no soporta tags.
+        static::saved(function () {
+            \App\Support\CacheHelper::flush(['products:public']);
+        });
+        static::deleted(function () {
+            \App\Support\CacheHelper::flush(['products:public']);
+        });
+    }
+
+    /**
+     * Registra un cambio de stock en el historial.
+     * Llamar explícitamente desde scrapers, orders, admin, etc.
+     */
+    public function recordStockChange(string $source, ?string $reference = null, ?int $actorId = null): void
+    {
+        $original = $this->getOriginal('stock');
+        $current  = (int) $this->stock;
+
+        if ((int) ($original ?? $current) === $current) {
+            return; // No cambió
+        }
+
+        \App\Models\ProductStockHistory::create([
+            'product_id'   => $this->id,
+            'stock_before' => $original !== null ? (int) $original : null,
+            'stock_after'  => $current,
+            'source'       => $source,
+            'reference'    => $reference,
+            'actor_id'     => $actorId,
+        ]);
     }
 
     // ============== Scout (full-text search) ==============

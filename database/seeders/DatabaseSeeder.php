@@ -25,12 +25,18 @@ class DatabaseSeeder extends Seeder
         Role::firstOrCreate(['name' => 'admin-productos',     'guard_name' => 'web']);
 
         // ====== USUARIOS ======
+        // Por seguridad, en PRODUCTION se genera un password random para el admin
+        // y se imprime una sola vez por consola. En local/staging se usa el clásico
+        // 'password' para que se pueda entrar sin fricción durante el desarrollo.
+        $isProduction = app()->environment('production');
+        $adminPassword = $isProduction ? Str::password(20) : 'password';
+        $buyerPassword = $isProduction ? Str::password(16) : 'password';
+
         $admin = User::updateOrCreate(
             ['email' => 'admin@tecnorexs.test'],
             [
                 'name'              => 'Admin Tecno-Rexs',
-                'password'          => Hash::make('password'),
-                'role'              => User::ROLE_ADMIN,
+                'password'          => Hash::make($adminPassword),
                 'email_verified_at' => now(),
             ]
         );
@@ -46,12 +52,20 @@ class DatabaseSeeder extends Seeder
                 'city'              => 'San Miguel de Tucumán',
                 'zip_code'          => 'T4000',
                 'country'           => 'Argentina',
-                'password'          => Hash::make('password'),
-                'role'              => User::ROLE_COMPRADOR,
+                'password'          => Hash::make($buyerPassword),
                 'email_verified_at' => now(),
             ]
         );
         $buyer->syncRoles([User::ROLE_COMPRADOR]);
+
+        if ($isProduction) {
+            $this->command->warn('==========================================================');
+            $this->command->warn('SEEDER EN PRODUCTION: passwords generadas aleatoriamente');
+            $this->command->warn("admin@tecnorexs.test      → {$adminPassword}");
+            $this->command->warn("comprador@tecnorexs.test  → {$buyerPassword}");
+            $this->command->warn('Guardá estos valores AHORA. No se vuelven a mostrar.');
+            $this->command->warn('==========================================================');
+        }
 
         // ====== CATEGORÍAS ======
         $categoriesData = [
