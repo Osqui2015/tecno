@@ -195,15 +195,11 @@ function decrement() {
                     </h1>
                 </div>
 
-                <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-brand-50/5 to-brand-50/15 border border-slate-200/50 space-y-4">
+                <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-brand-50/5 to-brand-50/15 border border-slate-200/50">
                     <div class="flex items-baseline gap-2.5">
                         <span class="text-3xl md:text-4xl font-black text-slate-800">
                             {{ formatPrice(displayPrice) }}
                         </span>
-                    </div>
-                    <div class="text-xs text-slate-500 font-medium flex items-center gap-1.5 pt-1">
-                        <SvgIcon name="credit-card" size="1rem" class="text-slate-400" />
-                        <span>O pagalo en 3 cuotas sin interés de <strong>{{ formatPrice(displayPrice / 3) }}</strong></span>
                     </div>
                 </div>
 
