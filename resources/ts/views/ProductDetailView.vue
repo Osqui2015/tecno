@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useProductsStore } from '@/stores/products';
 import { useCartStore } from '@/stores/cart';
@@ -29,11 +29,28 @@ const newRating = ref(5);
 const newComment = ref('');
 const submittingReview = ref(false);
 
-onMounted(async () => {
-    const id = Number(route.params.id);
-    await productsStore.fetchProduct(id);
-    await reviewsStore.fetchReviews(id);
-});
+// Recargar el producto cuando cambia el id de la ruta (Vue reusa el componente
+// si navegás entre productos sin pasar por otro lado, así que onMounted no alcanza)
+watch(
+    () => route.params.id,
+    async (rawId) => {
+        if (!rawId) return;
+        const id = Number(rawId);
+        if (!Number.isFinite(id) || id <= 0) return;
+
+        // Reseteamos estado del detalle al cambiar de producto
+        qty.value = 1;
+        imageError.value = false;
+        justAdded.value = false;
+        showReviewForm.value = false;
+        newComment.value = '';
+        newRating.value = 5;
+
+        await productsStore.fetchProduct(id);
+        await reviewsStore.fetchReviews(id);
+    },
+    { immediate: true },
+);
 
 function formatDate(d: string) {
     return new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -93,9 +110,14 @@ async function buyNow() {
 }
 
 const related = computed(() => {
-    if (!product.value) return [];
+    const current = product.value;
+    if (!current || current.id == null) return [];
+    const currentId = current.id;
+    const currentCat = current.category_id;
     return productsStore.products
-        .filter((p) => p.id !== product.value!.id && p.category_id === product.value!.category_id)
+        // Defensa: descartamos cualquier item malformado (sin id o null)
+        .filter((p): p is NonNullable<typeof p> => p != null && p.id != null)
+        .filter((p) => p.id !== currentId && p.category_id === currentCat)
         .slice(0, 5);
 });
 
