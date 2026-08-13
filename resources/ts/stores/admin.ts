@@ -300,6 +300,8 @@ export const useAdminStore = defineStore('admin', () => {
         loading,
         error,
         success,
+        flashError,
+        flashSuccess,
 
         // products
         fetchProducts,
