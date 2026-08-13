@@ -277,6 +277,12 @@ class ScrapeDazProducts extends Command
             ->pluck('id', 'external_id')
             ->toArray();
 
+        // Desactivar Scout/TNTSearch durante el guardado masivo para evitar
+        // errores de "unable to open database file" en hosting compartidos.
+        // Luego se reindexa manualmente con `php artisan scout:import`.
+        $originalScoutDriver = config('scout.driver');
+        config(['scout.driver' => null]);
+
         DB::beginTransaction();
 
         try {
@@ -363,13 +369,21 @@ class ScrapeDazProducts extends Command
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
+            // Restaurar driver de Scout incluso si falla
+            config(['scout.driver' => $originalScoutDriver]);
             $this->error('❌ Error guardando productos: ' . $e->getMessage());
             Log::error('DazScraper save error', ['error' => $e->getMessage()]);
             throw $e;
         }
 
+        // Restaurar driver de Scout
+        config(['scout.driver' => $originalScoutDriver]);
+
         $progressBar->finish();
         $this->newLine();
+
+        $this->warn('⚠️  Scout deshabilitado durante el scrape. Reindexá con:');
+        $this->line('    php artisan scout:import "App\\Models\\Product"');
 
         $afterCategories = count($categoryCache);
         $stats['new_categories'] = max(0, $afterCategories - $beforeCategories);
