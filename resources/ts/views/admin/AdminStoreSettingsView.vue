@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import axios from 'axios';
+import axios from '@/bootstrap';
 import { useAdminStore } from '@/stores/admin';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
