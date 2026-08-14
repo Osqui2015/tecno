@@ -25,6 +25,10 @@ export interface Product {
     active: boolean;
     is_from_daz?: boolean;
     category?: { id: number; name: string; slug: string };
+    // Auditoría
+    last_seen_at?: string | null;
+    last_updated_at?: string | null;
+    missing_since?: string | null;
 }
 
 export interface Category {

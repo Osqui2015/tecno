@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 use Laravel\Scout\Searchable;
 
@@ -39,6 +41,7 @@ class Product extends Model
         'category_id',
         'active',
         'last_seen_at',
+        'last_updated_at',
         'missing_since',
     ];
 
@@ -51,6 +54,7 @@ class Product extends Model
         'active'            => 'boolean',
         'categories_external' => 'array',
         'last_seen_at'      => 'datetime',
+        'last_updated_at'   => 'datetime',
         'missing_since'     => 'datetime',
     ];
 
@@ -76,19 +80,55 @@ class Product extends Model
             if ($product->stock !== null && (int) $product->stock < self::LOW_STOCK_THRESHOLD) {
                 $product->active = false;
             }
+            // Marcar la última actualización en cada save (incluyendo creación).
+            // El historial detallado se registra en el hook `updated`/`created`.
+            $product->last_updated_at = now();
         });
 
-        // Registrar cambios de stock en el historial (solo si cambia y NO viene
-        // del scraper, que registra su propio cambio con source='scraper').
+        // ─── Historial: producto nuevo ───
+        static::created(function (Product $product) {
+            $product->recordUpdateHistory(
+                event: \App\Models\ProductUpdateHistory::EVENT_CREATED,
+                changedFields: array_keys($product->getAttributes()),
+            );
+        });
+
+        // ─── Historial: cambios + cambios de stock ───
         static::updated(function (Product $product) {
-            if (! $product->wasChanged('stock')) {
-                return;
+            // Detectar TODOS los campos cambiados (no solo stock).
+            $changed = array_keys($product->getDirty());
+
+            // Filtrar campos que no son "contenido" del producto (ruido).
+            $changed = array_values(array_filter($changed, fn ($f) => ! in_array($f, [
+                'last_updated_at', // Siempre cambia, no es contenido del producto.
+                'updated_at',      // Eloquent también lo actualiza.
+            ])));
+
+            // Historial de cambios general (solo si hubo cambios reales).
+            if (! empty($changed)) {
+                $product->recordUpdateHistory(
+                    event: $product->wasChanged('active')
+                        ? ($product->active
+                            ? \App\Models\ProductUpdateHistory::EVENT_ACTIVATED
+                            : \App\Models\ProductUpdateHistory::EVENT_DEACTIVATED)
+                        : \App\Models\ProductUpdateHistory::EVENT_UPDATED,
+                    changedFields: $changed,
+                );
             }
-            if (app()->bound('scrape_in_progress') && app('scrape_in_progress')) {
-                return;
+
+            // Historial de stock (legado). Mantiene la tabla `product_stock_history`
+            // funcionando como antes, pero ahora respetando si el cambio viene
+            // de un scraper (para etiquetar bien el source).
+            if ($product->wasChanged('stock')) {
+                $ctx = self::resolveContext();
+                if ($ctx['source'] === \App\Models\ProductUpdateHistory::SOURCE_ADMIN) {
+                    // El hook legacy solo registraba stock desde admin (no desde scraper,
+                    // porque los scrapers ya registraban su propio cambio).
+                    $product->recordStockChange('admin', null, $ctx['actor_id']);
+                }
+                // Si viene de scraper, el scraper ya llama a recordStockChange()
+                // explícitamente con source 'scraper'. No duplicamos.
             }
-            $actorId = auth()->id();
-            $product->recordStockChange('admin', null, $actorId);
         });
 
         // Invalidar el cache público del catálogo cuando se crea/actualiza/borra.
@@ -99,6 +139,72 @@ class Product extends Model
         static::deleted(function () {
             \App\Support\CacheHelper::flush(['products:public']);
         });
+    }
+
+    /**
+     * Resuelve el contexto del cambio actual para etiquetar el historial:
+     *  - source: 'admin' | 'scraper:daz' | 'scraper:tuc' | 'system'
+     *  - actor_id: id del usuario si hay sesión activa
+     *
+     * Se basa en flags del container (app('scrape_origin') / app('scrape_in_progress'))
+     * seteados por los scrapers y jobs.
+     */
+    public static function resolveContext(): array
+    {
+        $scrapeOrigin = app()->bound('scrape_origin') ? app('scrape_origin') : null;
+        $scrapeActive = app()->bound('scrape_in_progress') ? (bool) app('scrape_in_progress') : false;
+
+        if ($scrapeActive && $scrapeOrigin) {
+            $source = match ($scrapeOrigin) {
+                'daz'   => \App\Models\ProductUpdateHistory::SOURCE_SCRAPER_DAZ,
+                'tuc'   => \App\Models\ProductUpdateHistory::SOURCE_SCRAPER_TUC,
+                default => \App\Models\ProductUpdateHistory::SOURCE_SYSTEM,
+            };
+            return ['source' => $source, 'actor_id' => null];
+        }
+
+        $actorId = auth()->id();
+        if ($actorId) {
+            return ['source' => \App\Models\ProductUpdateHistory::SOURCE_ADMIN, 'actor_id' => $actorId];
+        }
+
+        return ['source' => \App\Models\ProductUpdateHistory::SOURCE_SYSTEM, 'actor_id' => null];
+    }
+
+    /**
+     * Inserta una fila en product_update_history con el diff de los campos cambiados.
+     * Llamar desde hooks del modelo o explícitamente desde admin/scrapers.
+     *
+     * @param  string                 $event          'created'|'updated'|'activated'|'deactivated'
+     * @param  array<int, string>     $changedFields  Lista de campos que cambiaron
+     * @param  string|null            $reference      Etiqueta libre (ej: 'daz:scrape')
+     */
+    public function recordUpdateHistory(string $event, array $changedFields, ?string $reference = null): void
+    {
+        if (! $this->exists) {
+            return;
+        }
+
+        $ctx = self::resolveContext();
+
+        // Construir diff { campo: { before, after } }
+        $changes = [];
+        foreach ($changedFields as $field) {
+            $changes[$field] = [
+                'before' => $this->getOriginal($field),
+                'after'  => $this->getAttribute($field),
+            ];
+        }
+
+        \App\Models\ProductUpdateHistory::create([
+            'product_id'     => $this->id,
+            'source'         => $ctx['source'],
+            'event'          => $event,
+            'changed_fields' => array_values($changedFields),
+            'changes'        => $changes,
+            'actor_id'       => $ctx['actor_id'],
+            'reference'      => $reference,
+        ]);
     }
 
     /**
@@ -160,6 +266,16 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function updateHistory(): HasMany
+    {
+        return $this->hasMany(ProductUpdateHistory::class)->orderByDesc('created_at');
+    }
+
+    public function latestUpdate(): HasOne
+    {
+        return $this->hasOne(ProductUpdateHistory::class)->latestOfMany('created_at');
     }
 
     // ============================================================

@@ -54,6 +54,7 @@ class ScrapeProductsJob implements ShouldQueue
         // Marcamos en el container que estamos scrapeando para que el observer
         // del modelo no registre cambios automáticos (los registramos nosotros).
         app()->instance('scrape_in_progress', true);
+        app()->instance('scrape_origin', $this->origin);
 
         /** @var BaseWoodmartScraper $scraper */
         $scraper = app($this->scraperClass);

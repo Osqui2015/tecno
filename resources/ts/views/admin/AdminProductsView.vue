@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, reactive, computed, watch } from 'vue';
+import { onMounted, onUnmounted, ref, reactive, computed, watch } from 'vue';
 import { useAdminStore } from '@/stores/admin';
 import axios from '@/bootstrap';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
@@ -30,6 +30,64 @@ const bulkForm = reactive({
     category_id: null as number | null,
 });
 
+// ─── Estado del scraper (última / próxima corrida) ───
+interface ScrapeStatus {
+    now: string;
+    next_run_at: string;
+    next_run_human: string;
+    seconds_until_next: number;
+    interval_hours: number;
+    last_actual_run_at: string | null;
+    last_actual_run_human: string | null;
+    last_run_stats: {
+        last_run_at: string | null;
+        updated: number;
+        created: number;
+        by_source: Record<string, number>;
+    };
+}
+const scrapeStatus = ref<ScrapeStatus | null>(null);
+const now = ref(Date.now());
+let nowInterval: number | null = null;
+
+const secondsUntilNext = computed(() => {
+    if (!scrapeStatus.value) return 0;
+    // seconds_until_next del server + drift por tiempo transcurrido en el cliente
+    const drift = Math.floor((Date.now() - now.value) / 1000);
+    return Math.max(0, scrapeStatus.value.seconds_until_next - drift);
+});
+
+function formatCountdown(seconds: number): string {
+    if (seconds <= 0) return 'ahora';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function timeAgo(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+    const days = Math.floor(diff / 86400);
+    if (days < 30) return `hace ${days} día${days === 1 ? '' : 's'}`;
+    return new Date(iso).toLocaleDateString('es-AR');
+}
+
+// ¿Un producto está "vencido" (más de 1.5x el intervalo sin actualizarse)?
+function isStale(lastUpdatedAt: string | null | undefined, origin: string | null | undefined): boolean {
+    if (!lastUpdatedAt) return true;
+    if (!origin || origin === 'manual') return false;
+    if (!scrapeStatus.value) return false;
+    const intervalMs = scrapeStatus.value.interval_hours * 3600 * 1000;
+    const elapsed = Date.now() - new Date(lastUpdatedAt).getTime();
+    return elapsed > intervalMs * 1.5;
+}
+
 function load() {
     const params: any = { page: filters.page, per_page: filters.per_page };
     if (filters.search.trim()) params.search = filters.search.trim();
@@ -46,9 +104,26 @@ watch(hideLowStock, () => {
     load();
 });
 
-onMounted(() => {
+onMounted(async () => {
     load();
     admin.fetchCategories();
+    // Cargar estado del scraper para mostrar countdown
+    try {
+        const { data } = await axios.get<ScrapeStatus>('/admin/scrape-status');
+        scrapeStatus.value = data;
+    } catch (e) {
+        console.warn('No se pudo obtener estado del scraper', e);
+    }
+    // Tick cada segundo para que el countdown se actualice solo
+    now.value = Date.now();
+    nowInterval = window.setInterval(() => { now.value = Date.now(); }, 1000);
+});
+
+onUnmounted(() => {
+    if (nowInterval !== null) {
+        clearInterval(nowInterval);
+        nowInterval = null;
+    }
 });
 
 async function applyBulkMarkup() {
@@ -187,6 +262,35 @@ async function uploadCsv() {
             </div>
         </div>
 
+        <!-- Widget: Estado del scraper -->
+        <div v-if="scrapeStatus" class="card p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-sm">
+                    <SvgIcon name="refresh" size="1.1rem" />
+                </div>
+                <div>
+                    <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        Sincronización con proveedores
+                    </p>
+                    <p class="text-sm font-bold text-slate-800">
+                        Última corrida: <span class="text-slate-700">{{ scrapeStatus.last_actual_run_human || '— (aún no se ejecutó)' }}</span>
+                        <span v-if="scrapeStatus.last_run_stats?.updated !== undefined" class="text-xs text-slate-500 font-normal">
+                            ({{ scrapeStatus.last_run_stats.created }} nuevos · {{ scrapeStatus.last_run_stats.updated }} actualizados)
+                        </span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                <SvgIcon name="clock" size="1rem" class="text-emerald-600" />
+                <div class="text-xs">
+                    <p class="text-[10px] uppercase font-bold text-emerald-700">Próxima corrida</p>
+                    <p class="font-extrabold text-emerald-800 text-sm">
+                        {{ scrapeStatus.next_run_human }} · faltan <span class="text-emerald-600">{{ formatCountdown(secondsUntilNext) }}</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <LoadingSpinner v-if="admin.loading" text="Cargando productos..." />
 
         <div v-else-if="admin.products.length === 0" class="card p-12 text-center">
@@ -200,6 +304,7 @@ async function uploadCsv() {
                         <tr class="text-left text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                             <th class="px-4 py-3">Producto</th>
                             <th class="px-4 py-3">Origen</th>
+                            <th class="px-4 py-3">Última actualización</th>
                             <th class="px-4 py-3 text-right">Precio base</th>
                             <th class="px-4 py-3 text-right">Markup</th>
                             <th class="px-4 py-3 text-right">Final</th>
@@ -230,6 +335,23 @@ async function uploadCsv() {
                                 <span v-if="p.origin === 'daz'" class="chip chip-info text-[10px]">Daz</span>
                                 <span v-else-if="p.origin === 'tuc'" class="chip chip-brand text-[10px]">TusTec-Tuc</span>
                                 <span v-else class="chip chip-muted text-[10px]">Manual</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div v-if="p.last_updated_at" class="text-[11px] leading-tight">
+                                    <p
+                                        :class="isStale(p.last_updated_at, p.origin) ? 'text-rose-600 font-bold' : 'text-slate-700 font-semibold'"
+                                        :title="new Date(p.last_updated_at).toLocaleString('es-AR')"
+                                    >
+                                        {{ timeAgo(p.last_updated_at) }}
+                                    </p>
+                                    <span
+                                        v-if="isStale(p.last_updated_at, p.origin)"
+                                        class="chip bg-rose-50 text-rose-700 text-[9px] mt-0.5"
+                                    >
+                                        Desactualizado
+                                    </span>
+                                </div>
+                                <span v-else class="text-[10px] text-slate-400">—</span>
                             </td>
                             <td class="px-4 py-3 text-right font-mono text-xs">{{ formatPrice(p.price) }}</td>
                             <td class="px-4 py-3 text-right font-mono text-xs">{{ Number(p.markup_percent ?? 0).toFixed(0) }}%</td>

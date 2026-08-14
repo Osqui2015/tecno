@@ -8,6 +8,7 @@ const router = useRouter();
 
 const name = ref('');
 const email = ref('');
+const phone = ref('');
 const password = ref('');
 const passwordConfirmation = ref('');
 const showPassword = ref(false);
@@ -24,6 +25,12 @@ const passwordStrength = computed(() => {
     return { label: 'Muy segura', value: 3, color: 'bg-emerald-500' };
 });
 
+// Validación básica del celular: 10+ dígitos (sin contar +54 / 9).
+const phoneValid = computed(() => {
+    const digits = phone.value.replace(/\D+/g, '');
+    return digits.length >= 10 && digits.length <= 13;
+});
+
 async function handleSubmit() {
     if (!passwordsMatch.value) {
         alert('Las contraseñas no coinciden');
@@ -33,9 +40,14 @@ async function handleSubmit() {
         alert('Aceptá los términos para continuar');
         return;
     }
+    if (!phoneValid.value) {
+        alert('Ingresá un número de celular válido (mínimo 10 dígitos)');
+        return;
+    }
     const ok = await auth.register(
         name.value,
         email.value,
+        phone.value,
         password.value,
         passwordConfirmation.value
     );
@@ -124,6 +136,37 @@ async function handleSubmit() {
                             class="input"
                             placeholder="tu@email.com"
                         />
+                    </div>
+
+                    <div>
+                        <label class="label">Celular</label>
+                        <div class="relative">
+                            <input
+                                v-model="phone"
+                                type="tel"
+                                required
+                                inputmode="tel"
+                                autocomplete="tel"
+                                class="input pr-12"
+                                :class="{
+                                    'border-emerald-500 focus:ring-emerald-500/30 focus:border-emerald-500':
+                                        phoneValid,
+                                    'border-rose-500 focus:ring-rose-500/30 focus:border-rose-500':
+                                        phone && !phoneValid,
+                                }"
+                                placeholder="11 4123-4567"
+                            />
+                            <span
+                                v-if="phone"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
+                                :class="phoneValid ? 'text-emerald-500' : 'text-rose-500'"
+                            >
+                                {{ phoneValid ? '✓' : '⚠️' }}
+                            </span>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Lo necesitamos para coordinar la entrega de tu pedido.
+                        </p>
                     </div>
 
                     <div>

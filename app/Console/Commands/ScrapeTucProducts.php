@@ -41,6 +41,12 @@ class ScrapeTucProducts extends Command
     {
         $this->scraper = $scraper;
 
+        // Marcamos en el container que estamos scrapeando para que el observer
+        // del modelo no registre cambios automáticos de stock y para que el
+        // historial de actualizaciones se etiquete como 'scraper:tuc'.
+        app()->instance('scrape_in_progress', true);
+        app()->instance('scrape_origin', 'tuc');
+
         // Si se pasa --queue, despachamos el Job en background y salimos.
         if ($this->option('queue')) {
             if ($this->option('dry-run')) {

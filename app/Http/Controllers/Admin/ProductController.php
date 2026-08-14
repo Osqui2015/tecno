@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Product;
+use App\Models\ProductUpdateHistory;
+use App\Models\User;
 use App\Support\CacheHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -129,8 +131,70 @@ class ProductController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $product = Product::with('category')->findOrFail($id);
+        $product = Product::with('category')
+            ->with(['latestUpdate.actor'])
+            ->findOrFail($id);
+
         return response()->json($product);
+    }
+
+    /**
+     * GET /api/admin/products/{id}/history
+     * Historial paginado de cambios de un producto.
+     */
+    public function history(Request $request, int $id): JsonResponse
+    {
+        $product = Product::findOrFail($id);
+
+        $perPage = min($request->integer('per_page', 25), 100);
+
+        $query = ProductUpdateHistory::query()
+            ->where('product_id', $product->id)
+            ->with('actor:id,name,email')
+            ->orderByDesc('created_at');
+
+        if ($request->filled('source')) {
+            $query->where('source', $request->string('source'));
+        }
+
+        $rows = $query->paginate($perPage);
+
+        // Transformar para que la UI no tenga que conocer los nombres de columnas
+        $rows->getCollection()->transform(function (ProductUpdateHistory $h) {
+            return [
+                'id'              => $h->id,
+                'source'          => $h->source,
+                'source_label'    => $h->source_label,
+                'event'           => $h->event,
+                'summary'         => $h->summary,
+                'changed_fields'  => $h->changed_fields ?? [],
+                'changes'         => $h->changes ?? [],
+                'actor'           => $h->actor ? [
+                    'id'    => $h->actor->id,
+                    'name'  => $h->actor->name,
+                    'email' => $h->actor->email,
+                ] : null,
+                'reference'       => $h->reference,
+                'created_at'      => $h->created_at?->toIso8601String(),
+                'created_at_human'=> $h->created_at?->translatedFormat('d/m/Y H:i'),
+            ];
+        });
+
+        return response()->json([
+            'product' => [
+                'id'              => $product->id,
+                'name'            => $product->name,
+                'last_updated_at' => $product->last_updated_at?->toIso8601String(),
+                'last_updated_human' => $product->last_updated_at?->translatedFormat('d/m/Y H:i'),
+            ],
+            'data' => $rows->items(),
+            'meta' => [
+                'current_page' => $rows->currentPage(),
+                'last_page'    => $rows->lastPage(),
+                'total'        => $rows->total(),
+                'per_page'     => $rows->perPage(),
+            ],
+        ]);
     }
 
     /**

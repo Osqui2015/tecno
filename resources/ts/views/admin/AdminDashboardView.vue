@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
 import axios from '@/bootstrap';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
@@ -35,8 +35,43 @@ interface Stats {
     sales_last_30_days?: Array<{ date: string; orders_count: number; revenue: number }>;
 }
 
+interface ScrapeStatus {
+    now: string;
+    next_run_at: string;
+    next_run_human: string;
+    seconds_until_next: number;
+    interval_hours: number;
+    last_actual_run_at: string | null;
+    last_actual_run_human: string | null;
+    last_run_stats: {
+        last_run_at: string | null;
+        updated: number;
+        created: number;
+        by_source: Record<string, number>;
+    };
+}
+
 const stats = ref<Stats | null>(null);
+const scrapeStatus = ref<ScrapeStatus | null>(null);
 const loading = ref(true);
+let nowInterval: number | null = null;
+const now = ref(Date.now());
+
+const secondsUntilNext = computed(() => {
+    if (!scrapeStatus.value) return 0;
+    const drift = Math.floor((Date.now() - now.value) / 1000);
+    return Math.max(0, scrapeStatus.value.seconds_until_next - drift);
+});
+
+function formatCountdown(seconds: number): string {
+    if (seconds <= 0) return 'ahora';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
 
 onMounted(async () => {
     try {
@@ -46,6 +81,22 @@ onMounted(async () => {
         console.error(e);
     } finally {
         loading.value = false;
+    }
+    // Cargar estado del scraper (no bloquea el dashboard)
+    try {
+        const { data } = await axios.get<ScrapeStatus>('/admin/scrape-status');
+        scrapeStatus.value = data;
+    } catch (e) {
+        console.warn('No se pudo obtener estado del scraper', e);
+    }
+    now.value = Date.now();
+    nowInterval = window.setInterval(() => { now.value = Date.now(); }, 1000);
+});
+
+onUnmounted(() => {
+    if (nowInterval !== null) {
+        clearInterval(nowInterval);
+        nowInterval = null;
     }
 });
 
@@ -94,6 +145,44 @@ const statusLabel: Record<string, string> = {
                 <p class="text-[10px] text-rose-600 dark:text-rose-400 font-bold mt-1">
                     {{ stats.products.out_of_stock }} sin stock
                 </p>
+            </div>
+        </div>
+
+        <!-- Card: Estado del scraper -->
+        <div v-if="scrapeStatus" class="card p-5 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-br from-sky-50/60 to-indigo-50/40 border-sky-100">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-md">
+                    <SvgIcon name="refresh" size="1.3rem" />
+                </div>
+                <div>
+                    <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                        Sincronización con proveedores
+                    </p>
+                    <p class="text-base font-extrabold text-slate-800">
+                        {{ scrapeStatus.last_actual_run_human || 'Aún no se ejecutó' }}
+                    </p>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        <span v-if="scrapeStatus.last_run_stats?.last_run_at">
+                            {{ scrapeStatus.last_run_stats.created }} nuevos ·
+                            {{ scrapeStatus.last_run_stats.updated }} actualizados
+                        </span>
+                        <span v-else>
+                            Los productos Daz y TusTec-Tuc se actualizan cada {{ scrapeStatus.interval_hours }}h automáticamente.
+                        </span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 px-5 py-3 rounded-2xl bg-emerald-50 border-2 border-emerald-200 shadow-sm">
+                <SvgIcon name="clock" size="1.1rem" class="text-emerald-600" />
+                <div>
+                    <p class="text-[10px] uppercase font-extrabold text-emerald-700 leading-tight">Próxima corrida</p>
+                    <p class="font-extrabold text-emerald-800 text-sm leading-tight">
+                        {{ scrapeStatus.next_run_human }}
+                    </p>
+                    <p class="text-[10px] font-bold text-emerald-600 mt-0.5">
+                        faltan {{ formatCountdown(secondsUntilNext) }}
+                    </p>
+                </div>
             </div>
         </div>
 

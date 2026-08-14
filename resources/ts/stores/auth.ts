@@ -8,6 +8,7 @@ export interface User {
     id: number;
     name: string;
     email: string;
+    phone?: string | null;
     role: Role;
     roles?: Role[]; // Spatie roles
 }
@@ -78,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
     async function register(
         name: string,
         email: string,
+        phone: string,
         password: string,
         password_confirmation: string
     ): Promise<boolean> {
@@ -87,6 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
             const { data } = await axios.post('/register', {
                 name,
                 email,
+                phone,
                 password,
                 password_confirmation,
             });
@@ -95,6 +98,15 @@ export const useAuthStore = defineStore('auth', () => {
             persist();
             return true;
         } catch (e: any) {
+            // Mostrar mensaje del primer error de validación si existe
+            const errs = e.response?.data?.errors;
+            if (errs) {
+                const first = Object.values(errs)[0] as string[] | undefined;
+                if (first && first[0]) {
+                    error.value = first[0];
+                    return false;
+                }
+            }
             error.value =
                 e.response?.data?.message || 'Error al registrarse';
             return false;

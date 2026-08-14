@@ -41,6 +41,12 @@ class ScrapeDazProducts extends Command
     {
         $this->scraper = $scraper;
 
+        // Marcamos en el container que estamos scrapeando para que el observer
+        // del modelo no registre cambios automáticos de stock y para que el
+        // historial de actualizaciones se etiquete como 'scraper:daz'.
+        app()->instance('scrape_in_progress', true);
+        app()->instance('scrape_origin', 'daz');
+
         // Si se pasa --queue, despachamos el Job en background y salimos.
         // El progreso se puede seguir con `php artisan queue:work` o `php artisan pail`.
         if ($this->option('queue')) {

@@ -102,9 +102,13 @@ Route::middleware(['auth:sanctum', 'admin', 'throttle:admin-write'])->prefix('ad
     Route::post('/products/import/csv',  [AdminProductController::class, 'importCsv']);
     Route::post('/products',             [AdminProductController::class, 'store']);
     Route::get('/products/{id}',         [AdminProductController::class, 'show'])->whereNumber('id');
+    Route::get('/products/{id}/history', [AdminProductController::class, 'history'])->whereNumber('id');
     Route::patch('/products/{id}',       [AdminProductController::class, 'update'])->whereNumber('id');
     Route::delete('/products/{id}',      [AdminProductController::class, 'destroy'])->whereNumber('id');
     Route::post('/products/bulk-markup', [AdminProductController::class, 'bulkMarkup']);
+
+    // Estado del scraper (última / próxima ejecución)
+    Route::get('/scrape-status', [\App\Http\Controllers\Admin\ScrapeStatusController::class, 'index']);
 
     // Gestión de cupones (Admin CRUD)
     Route::get('/coupons',               [AdminCouponController::class, 'index']);
