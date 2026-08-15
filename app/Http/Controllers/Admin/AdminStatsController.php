@@ -180,10 +180,16 @@ class AdminStatsController extends Controller
     private function recentOrdersData(int $limit = 5): array
     {
         return Cache::remember("admin:stats:recent:{$limit}", self::CACHE_TTL, function () use ($limit) {
+            // ⚠️ customer_full_name es un ACCESSOR (concatenación de customer_name + customer_lastname).
+            // No es una columna real de la DB, por eso acá seleccionamos las dos columnas
+            // base y dejamos que Eloquent compute el accessor al serializar.
+            // (Bug pre-existente: el código original hacía `get(['...', 'customer_full_name'])`
+            // lo cual se traduce a `SELECT customer_full_name FROM orders` y falla en MySQL
+            // porque esa columna no existe.)
             $data = Order::with('user')
                 ->orderByDesc('created_at')
                 ->limit($limit)
-                ->get(['id', 'user_id', 'total', 'status', 'created_at', 'customer_full_name']);
+                ->get(['id', 'user_id', 'total', 'status', 'created_at', 'customer_name', 'customer_lastname']);
             return ['data' => $data];
         });
     }
