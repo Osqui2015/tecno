@@ -160,7 +160,7 @@ const importing = ref(false);
 const importMessage = ref('');
 
 function exportCsv() {
-    window.location.href = '/api/admin/products/export/csv';
+    window.location.href = '/admin/products/export/csv';
 }
 
 function handleFileChange(event: Event) {
@@ -177,7 +177,7 @@ async function uploadCsv() {
     try {
         const formData = new FormData();
         formData.append('file', importFile.value);
-        const { data } = await axios.post('/api/admin/products/import/csv', formData, {
+        const { data } = await axios.post('/admin/products/import/csv', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
         importMessage.value = data.message;

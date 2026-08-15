@@ -56,7 +56,7 @@ async function loadCoupons() {
         if (filters.search.trim()) params.search = filters.search.trim();
         if (filters.active !== '') params.active = filters.active;
 
-        const { data } = await axios.get('/api/admin/coupons', { params });
+        const { data } = await axios.get('/admin/coupons', { params });
         coupons.value = data.data;
         meta.value = {
             current_page: data.current_page,
@@ -120,9 +120,9 @@ async function saveCoupon() {
         };
 
         if (editingCoupon.value) {
-            await axios.patch(`/api/admin/coupons/${editingCoupon.value.id}`, payload);
+            await axios.patch(`/admin/coupons/${editingCoupon.value.id}`, payload);
         } else {
-            await axios.post('/api/admin/coupons', payload);
+            await axios.post('/admin/coupons', payload);
         }
 
         showModal.value = false;
@@ -138,7 +138,7 @@ async function saveCoupon() {
 
 async function toggleActive(coupon: Coupon) {
     try {
-        const { data } = await axios.patch(`/api/admin/coupons/${coupon.id}/toggle`);
+        const { data } = await axios.patch(`/admin/coupons/${coupon.id}/toggle`);
         coupon.active = data.coupon.active;
     } catch (err) {
         console.error('Error cambiando estado del cupón', err);
@@ -148,7 +148,7 @@ async function toggleActive(coupon: Coupon) {
 async function deleteCoupon(coupon: Coupon) {
     if (!confirm(`¿Seguro que deseas eliminar el cupón "${coupon.code}"?`)) return;
     try {
-        await axios.delete(`/api/admin/coupons/${coupon.id}`);
+        await axios.delete(`/admin/coupons/${coupon.id}`);
         loadCoupons();
     } catch (err) {
         console.error('Error eliminando cupón', err);

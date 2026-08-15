@@ -43,7 +43,7 @@ const formErrors = ref<Record<string, string[]>>({});
 async function loadSettings() {
     loading.value = true;
     try {
-        const { data } = await axios.get<StoreInfo>('/api/admin/store-info');
+        const { data } = await axios.get<StoreInfo>('/admin/store-info');
         form.name = data.name ?? '';
         form.address = data.address ?? '';
         form.phone = data.phone ?? '';
@@ -66,7 +66,7 @@ async function save() {
     saving.value = true;
     formErrors.value = {};
     try {
-        await axios.patch('/api/admin/store-info', { ...form });
+        await axios.patch('/admin/store-info', { ...form });
         admin.flashSuccess('Configuración guardada');
     } catch (err: any) {
         if (err.response?.status === 422) {
