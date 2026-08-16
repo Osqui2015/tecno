@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 
-interface BrandCount {
-    brand: string;
-    count: number;
+interface Category {
+    id: number;
+    name: string;
+    slug: string;
+    products_count?: number;
 }
 
 const props = defineProps<{
-    availableBrands: BrandCount[];
-    brand: string | null;
+    categories: Category[];
+    categoryId: number | null;
     minPrice: number | null;
     maxPrice: number | null;
     sortBy: string;
 }>();
 
 const emit = defineEmits<{
-    (e: 'update:brand', value: string): void;
+    (e: 'update:categoryId', value: number | null): void;
     (e: 'update:minPrice', value: number | null): void;
     (e: 'update:maxPrice', value: number | null): void;
     (e: 'update:sortBy', value: string): void;
@@ -37,6 +39,10 @@ function clearAll() {
     localMinPrice.value = null;
     localMaxPrice.value = null;
     emit('clear-filters');
+}
+
+function selectCategory(id: number | null) {
+    emit('update:categoryId', id);
 }
 </script>
 
@@ -94,27 +100,27 @@ function clearAll() {
             </button>
         </div>
 
-        <!-- Marcas -->
-        <div v-if="availableBrands && availableBrands.length > 0" class="space-y-2">
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Marca</label>
-            <div class="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+        <!-- Categorías -->
+        <div v-if="categories && categories.length > 0" class="space-y-2">
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Categoría</label>
+            <div class="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                 <button
-                    @click="emit('update:brand', '')"
-                    :class="!brand ? 'font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                    @click="selectCategory(null)"
+                    :class="categoryId === null ? 'font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
                     class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex justify-between items-center transition-colors"
                 >
-                    <span>Todas las marcas</span>
+                    <span>Todas las categorías</span>
                 </button>
 
                 <button
-                    v-for="b in availableBrands"
-                    :key="b.brand"
-                    @click="emit('update:brand', b.brand)"
-                    :class="brand === b.brand ? 'font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                    v-for="c in categories"
+                    :key="c.id"
+                    @click="selectCategory(c.id)"
+                    :class="categoryId === c.id ? 'font-bold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
                     class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex justify-between items-center transition-colors"
                 >
-                    <span class="truncate">{{ b.brand }}</span>
-                    <span class="text-[10px] text-slate-400">({{ b.count }})</span>
+                    <span class="truncate">{{ c.name }}</span>
+                    <span v-if="c.products_count !== undefined" class="text-[10px] text-slate-400">({{ c.products_count }})</span>
                 </button>
             </div>
         </div>

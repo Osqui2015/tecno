@@ -13,7 +13,7 @@ import ProductFilters from '@/components/ProductFilters.vue';
 import Pagination from '@/components/Pagination.vue';
 
 const store = useProductsStore();
-const { searchQuery, filterCategory, filterBrand, minPrice, maxPrice, sortBy, availableBrands } = storeToRefs(store);
+const { searchQuery, filterCategory, minPrice, maxPrice, sortBy, categories } = storeToRefs(store);
 const route = useRoute();
 
 onMounted(() => {
@@ -39,7 +39,7 @@ watch(
     }
 );
 
-watch([filterCategory, filterBrand, minPrice, maxPrice, sortBy], () => {
+watch([filterCategory, minPrice, maxPrice, sortBy], () => {
     store.fetchProducts(1);
 });
 
@@ -47,7 +47,6 @@ const products = computed(() => store.filteredProducts);
 
 function clearFilters() {
     store.setCategory(null);
-    store.filterBrand = null;
     store.minPrice = null;
     store.maxPrice = null;
     store.sortBy = 'name_asc';
@@ -65,9 +64,6 @@ const activeFilters = computed(() => {
     if (store.filterCategory !== null) {
         const cat = store.categories.find((c) => c.id === store.filterCategory);
         if (cat) f.push({ label: cat.name, clear: () => store.setCategory(null) });
-    }
-    if (store.filterBrand) {
-        f.push({ label: store.filterBrand, clear: () => store.filterBrand = null });
     }
     if (store.minPrice !== null || store.maxPrice !== null) {
         const min = store.minPrice ? `$${store.minPrice}` : '$0';
@@ -129,8 +125,8 @@ const activeFilters = computed(() => {
             <!-- Sidebar Filtros -->
             <div class="lg:col-span-1">
                 <ProductFilters
-                    :available-brands="availableBrands"
-                    v-model:brand="filterBrand"
+                    :categories="categories"
+                    v-model:category-id="filterCategory"
                     v-model:min-price="minPrice"
                     v-model:max-price="maxPrice"
                     v-model:sort-by="sortBy"
@@ -146,7 +142,7 @@ const activeFilters = computed(() => {
                     v-else-if="products.length === 0"
                     icon="search"
                     title="No se encontraron productos"
-                    description="Intenta modificar la búsqueda o los filtros de precio/marca para encontrar lo que buscas."
+                    description="Intenta modificar la búsqueda o los filtros de precio/categoría para encontrar lo que buscas."
                 >
                     <template #actions>
                         <button @click="clearFilters" class="btn btn-primary">
