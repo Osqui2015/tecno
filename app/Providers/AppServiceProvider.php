@@ -16,6 +16,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $scoutPath = storage_path('app/scout');
+        if (! is_dir($scoutPath)) {
+            @mkdir($scoutPath, 0775, true);
+        }
+
         $this->configureRateLimiting();
         $this->syncStoreConfigFromDatabase();
     }
