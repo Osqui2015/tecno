@@ -126,12 +126,13 @@ async function addToCart() {
         <div class="p-5 flex-1 flex flex-col justify-between gap-2 bg-white">
             <div>
                 <div class="flex items-center gap-1.5 mb-1.5">
-                    <span
+                    <router-link
                         v-if="product.category"
-                        class="text-[9px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-full"
+                        :to="{ name: 'products-by-category', params: { slug: product.category.name } }"
+                        class="text-[9px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 hover:bg-brand-100 px-2.5 py-0.5 rounded-full transition-colors"
                     >
                         {{ product.category.name }}
-                    </span>
+                    </router-link>
                     <span
                         v-if="product.brand"
                         class="text-[9px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full"

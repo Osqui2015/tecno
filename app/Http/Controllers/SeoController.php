@@ -51,11 +51,19 @@ class SeoController extends Controller
     }
 
     /**
-     * GET /categorias/{slug}
+     * GET /productos/{slug} o /categorias/{slug}
      */
     public function category(string $slug): View
     {
-        $category = \App\Models\Category::where('slug', $slug)->firstOrFail();
+        $decoded = urldecode($slug);
+        $category = \App\Models\Category::where('slug', $decoded)
+            ->orWhere('name', $decoded)
+            ->orWhere('slug', \Illuminate\Support\Str::slug($decoded))
+            ->first();
+
+        if (! $category) {
+            return view('app');
+        }
 
         return view('app', [
             'seoCategory'     => $category,
@@ -63,7 +71,7 @@ class SeoController extends Controller
             'seoDescription'  => $category->description
                 ?: "Explorá nuestra selección de {$category->name} en Tecno-Rexs.",
             'seoImage'        => asset('icons/icon-512.png'),
-            'seoUrl'          => url("/categorias/{$category->slug}"),
+            'seoUrl'          => url("/productos/{$category->name}"),
             'seoType'         => 'website',
         ]);
     }

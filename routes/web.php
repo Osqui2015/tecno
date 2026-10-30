@@ -13,6 +13,8 @@ Route::get('/productos/{id}', [SeoController::class, 'product'])
 Route::get('/productos/{slug}/{id}', [SeoController::class, 'productBySlug'])
     ->whereNumber('id')
     ->name('seo.product.slug');
+Route::get('/productos/{slug}', [SeoController::class, 'category'])
+    ->name('seo.product.category');
 Route::get('/categorias/{slug}', [SeoController::class, 'category'])
     ->name('seo.category');
 

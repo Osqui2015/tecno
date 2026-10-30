@@ -284,15 +284,15 @@ const formatPrice = (n: number) => {
         <!-- 2. CATEGORIES HORIZONTAL PILLS BAR -->
         <section id="categorias-seccion" class="animate-slide-up py-4">
             <div class="flex flex-nowrap overflow-x-auto gap-3 pb-3 w-full justify-start px-2 scrollbar-thin">
-                <button
+                <router-link
                     v-for="cat in store.categories"
                     :key="cat.id"
-                    @click="store.setCategory(cat.id); $router.push({ name: 'products' })"
+                    :to="{ name: 'products-by-category', params: { slug: cat.name } }"
                     class="flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-brand-50 border border-slate-200/50 hover:border-brand-200 text-slate-800 font-bold text-xs rounded-full transition-all shadow-sm hover:scale-[1.03] cursor-pointer flex-shrink-0"
                 >
                     <span class="material-symbols-outlined text-[18px] text-slate-500">{{ getMaterialIcon(cat.name) }}</span>
                     {{ cat.name }}
-                </button>
+                </router-link>
             </div>
         </section>
 

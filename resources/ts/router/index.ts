@@ -14,16 +14,20 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ProductsView.vue'),
     },
     {
-        path: '/productos/:id',
+        path: '/productos/:id(\\d+)',
         name: 'product-detail',
         component: () => import('@/views/ProductDetailView.vue'),
         props: true,
     },
     {
-        path: '/categorias/:slug',
+        path: '/productos/:slug',
         name: 'products-by-category',
         component: () => import('@/views/ProductsView.vue'),
         props: true,
+    },
+    {
+        path: '/categorias/:slug',
+        redirect: (to) => ({ name: 'products-by-category', params: { slug: to.params.slug } }),
     },
     {
         path: '/carrito',

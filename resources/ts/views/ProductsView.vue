@@ -2,7 +2,7 @@
 import { onMounted, watch, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useProductsStore } from '@/stores/products';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import ProductCard from '@/components/ProductCard.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
@@ -13,45 +13,87 @@ import ProductFilters from '@/components/ProductFilters.vue';
 import Pagination from '@/components/Pagination.vue';
 
 const store = useProductsStore();
-const { searchQuery, filterCategory, minPrice, maxPrice, sortBy, categories } = storeToRefs(store);
+const { filterCategory, minPrice, maxPrice, sortBy, categories } = storeToRefs(store);
 const route = useRoute();
+const router = useRouter();
 
-onMounted(() => {
-    store.fetchProducts();
-    store.fetchCategories();
-    if (route.params.slug) {
-        const cat = store.categories.find(
-            (c) => c.slug === route.params.slug
-        );
-        if (cat) store.setCategory(cat.id);
+function findCategoryByParam(rawParam: string | string[] | undefined) {
+    const slugOrName = Array.isArray(rawParam) ? rawParam[0] : rawParam;
+    if (!slugOrName) return null;
+    const normalized = decodeURIComponent(slugOrName).trim().toLowerCase();
+    return (
+        store.categories.find(
+            (c) =>
+                c.name.trim().toLowerCase() === normalized ||
+                c.slug.trim().toLowerCase() === normalized
+        ) ?? null
+    );
+}
+
+async function syncCategoryFromRoute() {
+    if (store.categories.length === 0) {
+        await store.fetchCategories();
     }
+    const cat = findCategoryByParam(route.params.slug);
+    store.filterCategory = cat ? cat.id : null;
+    await store.fetchProducts(1);
+}
+
+onMounted(async () => {
+    await syncCategoryFromRoute();
 });
 
 watch(
     () => route.params.slug,
-    (slug) => {
-        if (!slug) {
-            store.setCategory(null);
-        } else {
-            const cat = store.categories.find((c) => c.slug === slug);
-            if (cat) store.setCategory(cat.id);
-        }
+    () => {
+        syncCategoryFromRoute();
     }
 );
 
-watch([filterCategory, minPrice, maxPrice, sortBy], () => {
+watch([minPrice, maxPrice, sortBy], () => {
     store.fetchProducts(1);
 });
 
 const products = computed(() => store.filteredProducts);
 
+const currentCategoryName = computed(() => {
+    if (store.filterCategory === null) return null;
+    return store.categories.find((c) => c.id === store.filterCategory)?.name ?? null;
+});
+
+function handleCategoryChange(categoryId: number | null) {
+    if (categoryId === null) {
+        if (route.params.slug) {
+            router.push({ name: 'products' });
+        } else {
+            store.filterCategory = null;
+            store.fetchProducts(1);
+        }
+        return;
+    }
+
+    const cat = store.categories.find((c) => c.id === categoryId);
+    if (cat) {
+        if (route.params.slug === cat.name) {
+            store.filterCategory = cat.id;
+            store.fetchProducts(1);
+        } else {
+            router.push({ name: 'products-by-category', params: { slug: cat.name } });
+        }
+    }
+}
+
 function clearFilters() {
-    store.setCategory(null);
     store.minPrice = null;
     store.maxPrice = null;
     store.sortBy = 'name_asc';
     store.setSearch('');
-    store.fetchProducts(1);
+    if (route.params.slug) {
+        router.push({ name: 'products' });
+    } else {
+        store.filterCategory = null;
+        store.fetchProducts(1);
+    }
 }
 
 function handlePageChange(page: number) {
@@ -63,7 +105,7 @@ const activeFilters = computed(() => {
     const f: { label: string; clear: () => void }[] = [];
     if (store.filterCategory !== null) {
         const cat = store.categories.find((c) => c.id === store.filterCategory);
-        if (cat) f.push({ label: cat.name, clear: () => store.setCategory(null) });
+        if (cat) f.push({ label: cat.name, clear: () => handleCategoryChange(null) });
     }
     if (store.minPrice !== null || store.maxPrice !== null) {
         const min = store.minPrice ? `$${store.minPrice}` : '$0';
@@ -81,7 +123,7 @@ const activeFilters = computed(() => {
     <div class="space-y-6">
         <PageHeader
             icon="box"
-            title="Todos los productos"
+            :title="currentCategoryName ? currentCategoryName : 'Todos los productos'"
             :subtitle="
                 store.totalProducts > 0
                     ? `${store.totalProducts} productos en el catálogo`
@@ -126,10 +168,11 @@ const activeFilters = computed(() => {
             <div class="lg:col-span-1">
                 <ProductFilters
                     :categories="categories"
-                    v-model:category-id="filterCategory"
+                    :category-id="filterCategory"
                     v-model:min-price="minPrice"
                     v-model:max-price="maxPrice"
                     v-model:sort-by="sortBy"
+                    @update:category-id="handleCategoryChange"
                     @clear-filters="clearFilters"
                 />
             </div>

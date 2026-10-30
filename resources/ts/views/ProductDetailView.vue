@@ -157,7 +157,12 @@ const shareText = computed(() => {
         <Breadcrumb
             :items="[
                 { label: 'Inicio', to: { name: 'home' } },
-                { label: product.category?.name ?? 'Productos', to: { name: 'products' } },
+                {
+                    label: product.category?.name ?? 'Productos',
+                    to: product.category
+                        ? { name: 'products-by-category', params: { slug: product.category.name } }
+                        : { name: 'products' },
+                },
                 { label: product.name ?? '' },
             ]"
         />
@@ -200,9 +205,13 @@ const shareText = computed(() => {
             <div class="flex flex-col space-y-6">
                 <div>
                     <div class="flex flex-wrap items-center gap-2 mb-3">
-                        <span v-if="product.category" class="chip chip-brand">
+                        <router-link
+                            v-if="product.category"
+                            :to="{ name: 'products-by-category', params: { slug: product.category.name } }"
+                            class="chip chip-brand hover:opacity-80 transition-opacity"
+                        >
                             {{ product.category.name }}
-                        </span>
+                        </router-link>
                         <span v-if="product.brand" class="chip chip-muted flex items-center gap-1">
                             <SvgIcon name="tag" size="0.7rem" />
                             {{ product.brand }}
