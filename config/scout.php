@@ -22,12 +22,9 @@ return [
     */
     'tntsearch' => [
         'storage'   => storage_path('app/scout'),
-        'tokenizer' => \TeamTNT\TNTSearch\TNTSearch::class,
-        'tokenizer_params' => [
-            'stemmer'    => \TeamTNT\TNTSearch\Stemmer\PorterStemmer::class,
-            'stopwords'  => ['a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'if', 'in', 'is', 'it', 'of', 'on', 'or', 'the', 'to', 'with'],
-            'min_length' => 3,
-        ],
+        'tokenizer' => \TeamTNT\TNTSearch\Tokenizer\Tokenizer::class,
+        'stemmer'   => \TeamTNT\TNTSearch\Stemmer\NoStemmer::class,
+        'stopwords' => ['a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'if', 'in', 'is', 'it', 'of', 'on', 'or', 'the', 'to', 'with'],
         'fuzziness'      => env('SCOUT_TNTSEARCH_FUZZINESS', true),
         'fuzzy'          => [
             'max_edits'      => 2,
