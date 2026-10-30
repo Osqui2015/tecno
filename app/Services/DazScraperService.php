@@ -21,5 +21,6 @@ class DazScraperService extends BaseWoodmartScraper
         $this->baseUrl  = 'https://dazimportadora.com.ar';
         $this->origin   = 'daz';
         $this->referer  = 'https://dazimportadora.com.ar/productos/';
+        $this->shopPath = '/productos/';
     }
 }

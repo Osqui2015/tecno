@@ -31,15 +31,18 @@ use RuntimeException;
  *
  * Las subclases solo configuran el sitio y (si hace falta) sobreescriben
  * los hooks `extractCategories()` y `extractBrand()`.
+ *
+ * Hereda de AbstractProductScraper el loop de páginas, los helpers HTTP,
+ * y los helpers de parsing (resolveUrl, cleanText, firstOf, parsePriceAmount).
  */
-abstract class BaseWoodmartScraper
+abstract class BaseWoodmartScraper extends AbstractProductScraper
 {
-    protected string $baseUrl = '';
+    /**
+     * Prefijo para los external_id (las subclases definen el suyo).
+     *  - Daz:  '' (vacío, usa el data-id directo)
+     *  - Tuc:  '' (vacío, usa el data-id directo)
+     */
     protected string $externalIdPrefix = '';
-    protected string $origin = 'manual';
-    protected string $referer = '';
-    protected string $shopPath = '/productos/';
-
 
     /**
      * Parámetros por defecto del AJAX de WooCommerce.
@@ -67,127 +70,12 @@ abstract class BaseWoodmartScraper
         'products_shadow'             => '0',
     ];
 
-    /**
-     * Cada subclase configura aquí su sitio (baseUrl, origin, referer, etc.).
-     */
-    abstract protected function configure(): void;
-
-    public function __construct()
-    {
-        $this->configure();
-    }
-
     // ============================================================
-    //  Pipeline principal
+    //  fetchPage (específico de Woodmart AJAX)
     // ============================================================
 
     /**
-     * Scrapea todas las páginas (o hasta $maxPages) y devuelve
-     * los productos normalizados + estadísticas.
-     *
-     * @param  ?\Closure $onProgress  function(array $product, int $page, int $total, ?int $estimatedTotal): void
-     * @return array{
-     *   stats: array<string,int>,
-     *   products: array<int, array<string,mixed>>,
-     *   errors: array<int,string>,
-     *   estimated_total: ?int
-     * }
-     */
-    public function scrape(?int $maxPages = null, int $delaySeconds = 1, ?\Closure $onProgress = null): array
-    {
-        $stats = [
-            'pages' => 0,
-            'products_total' => 0,
-            'products_with_image' => 0,
-            'products_with_brand' => 0,
-            'products_without_price' => 0,
-        ];
-        $errors = [];
-        $allProducts = [];
-        $estimatedTotal = null;
-
-        $page = 1;
-        $url = $this->baseUrl . $this->shopPath;
-
-
-        do {
-            try {
-                $result = $this->fetchPage($url);
-                $stats['pages']++;
-
-                // Capturar el total estimado de la primera página (viene en resultCount)
-                if ($estimatedTotal === null && isset($result['total'])) {
-                    $estimatedTotal = $result['total'];
-                }
-
-                foreach ($result['products'] as $product) {
-                    $allProducts[] = $product;
-                    $stats['products_total']++;
-                    if (! empty($product['image'])) {
-                        $stats['products_with_image']++;
-                    }
-                    if (! empty($product['brand'])) {
-                        $stats['products_with_brand']++;
-                    }
-                    if ($product['list_price'] === null && $product['cash_price'] === null) {
-                        $stats['products_without_price']++;
-                    }
-
-                    if ($onProgress !== null) {
-                        $onProgress($product, $page, $stats['products_total'], $estimatedTotal);
-                    }
-                }
-
-                Log::info("{$this->origin}Scraper: página procesada", [
-                    'page'  => $page,
-                    'url'   => $url,
-                    'count' => count($result['products']),
-                    'total' => $estimatedTotal,
-                    'next'  => $result['nextPage'] ?? null,
-                ]);
-            } catch (\Throwable $e) {
-                $errors[] = "Página {$page}: " . $e->getMessage();
-                Log::error("{$this->origin}Scraper: error en página", [
-                    'page'  => $page,
-                    'url'   => $url,
-                    'error' => $e->getMessage(),
-                ]);
-                // Salimos si la primera página falla — algo está muy mal
-                if ($page === 1) {
-                    break;
-                }
-                // Si no es la primera, seguimos. Respetamos el delay para no martillar
-                // al proveedor si está caído.
-                $url = $result['nextPage'] ?? null;
-                $page++;
-                if ($url && $delaySeconds > 0) {
-                    sleep($delaySeconds);
-                }
-                continue;
-            }
-
-            if ($maxPages !== null && $page >= $maxPages) {
-                break;
-            }
-
-            $url = $result['nextPage'] ?? null;
-            $page++;
-
-            if ($url && $delaySeconds > 0) {
-                sleep($delaySeconds);
-            }
-        } while ($url);
-
-        return [
-            'stats' => $stats,
-            'products' => $allProducts,
-            'errors' => $errors,
-            'estimated_total' => $estimatedTotal,
-        ];
-    }
-
-    /**
-     * Descarga UNA página y parsea sus productos.
+     * Descarga UNA página AJAX y parsea sus productos.
      *
      * @return array{products: array<int, array<string,mixed>>, nextPage: ?string, total: ?int}
      */
@@ -230,10 +118,6 @@ abstract class BaseWoodmartScraper
 
     /**
      * Extrae el total de productos del campo `resultCount` del AJAX.
-     * Ej: "Mostrando 1–18 de 1500 resultados" → 1500
-     *     "Mostrando 19-36 de 1500 resultados" → 1500
-     *
-     * Devuelve null si no puede parsearlo (modo degrada a barra "indeterminada").
      */
     protected function extractTotalProducts(array $data): ?int
     {
@@ -247,15 +131,12 @@ abstract class BaseWoodmartScraper
             if ($raw === null) {
                 continue;
             }
-            // Si ya es número, listo
             if (is_numeric($raw)) {
                 return (int) $raw;
             }
-            // Si es string tipo "Mostrando X-Y de Z resultados"
             if (is_string($raw) && preg_match('/de\s+(\d+)\s+result/i', $raw, $m)) {
                 return (int) $m[1];
             }
-            // Variante: "Z productos"
             if (is_string($raw) && preg_match('/(\d+)\s+productos?/i', $raw, $m)) {
                 return (int) $m[1];
             }
@@ -264,10 +145,9 @@ abstract class BaseWoodmartScraper
         return null;
     }
 
-    // ============================================================
-    //  HTTP
-    // ============================================================
-
+    /**
+     * Construye la URL del AJAX de WooCommerce con todos los parámetros atts[...].
+     */
     private function buildRequestUrl(string $pageUrl): string
     {
         if (str_contains($pageUrl, 'woo_ajax=1')) {
@@ -282,7 +162,13 @@ abstract class BaseWoodmartScraper
         return $pageUrl . '?' . http_build_query($params);
     }
 
-    private function getHeaders(): array
+    /**
+     * Headers HTTP específicos para AJAX de Woodmart.
+     * ⚠️ NO pedimos 'br' (Brotli) porque el cURL de Laragon en este
+     * entorno no decodifica Brotli y rompe con "Unrecognized content
+     * encoding type". El server entonces nos manda gzip/deflate.
+     */
+    protected function getHeaders(): array
     {
         return [
             'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' .
@@ -290,16 +176,19 @@ abstract class BaseWoodmartScraper
                 'Chrome/120.0.0.0 Safari/537.36',
             'Accept'          => 'application/json, text/html, */*',
             'Accept-Language' => 'es-AR,es;q=0.9,en;q=0.8',
-            'Accept-Encoding' => 'gzip, deflate, br',
+            'Accept-Encoding' => 'gzip, deflate',
             'X-Requested-With' => 'XMLHttpRequest',
             'Referer'         => $this->referer,
         ];
     }
 
     // ============================================================
-    //  Parsing HTML
+    //  Parsing HTML (específico de Woodmart)
     // ============================================================
 
+    /**
+     * Parsea el HTML de la respuesta AJAX y extrae las cards de producto.
+     */
     private function parseProductsFromHtml(string $html): array
     {
         if (trim($html) === '') {
@@ -308,8 +197,6 @@ abstract class BaseWoodmartScraper
 
         $dom = new DOMDocument('1.0', 'UTF-8');
         $previous = libxml_use_internal_errors(true);
-
-        // Envoltura mínima para que DOMDocument acepte fragmento suelto
         $wrapped = '<?xml encoding="UTF-8"><div>' . $html . '</div>';
         $dom->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         libxml_clear_errors();
@@ -334,7 +221,6 @@ abstract class BaseWoodmartScraper
 
     /**
      * Parsea un nodo <div class="wd-product" data-id="12345">.
-     * Coordina todos los hooks de extracción.
      */
     protected function parseProductNode(DOMXPath $xpath, DOMNode $node): ?array
     {
@@ -394,10 +280,10 @@ abstract class BaseWoodmartScraper
     // ============================================================
 
     /**
-     * Imagen principal del card. Estrategia en orden de prioridad:
+     * Imagen principal del card Woodmart.
+     * Estrategia en orden de prioridad:
      *  1) data-image-url del slider de galería (imagen principal full-size)
      *  2) <img class="attachment-*"> dentro del product-thumb
-     *     (cubre attachment-large, attachment-339x387, attachment-300x300, etc.)
      *  3) Cualquier <img> dentro del product-thumb como último fallback
      *
      * Si la URL tiene sufijo de tamaño WordPress (`-339x387.jpg`),
@@ -422,7 +308,6 @@ abstract class BaseWoodmartScraper
         }
 
         // 2) Cualquier <img.attachment-*> dentro del product-thumb
-        //    (attachment-large, attachment-339x387, attachment-300x300, etc.)
         $imgNodes = $xpath->query(
             './/div[contains(@class, "product-thumb")]//img[contains(@class, "attachment-")]',
             $node
@@ -459,12 +344,9 @@ abstract class BaseWoodmartScraper
     }
 
     /**
-     * Quita el sufijo de tamaño que WordPress agrega a las imágenes:
+     * Quita el sufijo de tamaño que WordPress agrega a las imágenes.
      *   `WhatsApp-Image-2026-08-06-at-3.03.17-PM-339x387.jpeg`
      *     → `WhatsApp-Image-2026-08-06-at-3.03.17-PM.jpeg`
-     *
-     * Solo si el sufijo es exactamente del patrón `-NNNxNNN` antes de la
-     * extensión. Si no matchea, devuelve la URL tal cual.
      */
     protected function stripWordpressSizeSuffix(string $url): string
     {
@@ -473,7 +355,6 @@ abstract class BaseWoodmartScraper
 
     /**
      * gtm4wp_productdata (JSON embebido). Contiene sku, price, stocklevel.
-     * Devuelve null si no está presente o no se pudo parsear.
      */
     protected function extractGtmData(DOMXPath $xpath, DOMNode $node): ?array
     {
@@ -492,40 +373,164 @@ abstract class BaseWoodmartScraper
     }
 
     /**
-     * Stock del producto. Prioridad:
+     * Stock del producto en la card del LISTADO. Prioridad:
      *  1) gtm4wp stocklevel
-     *  2) input.qty[max]
-     *  3) <p class="wd-product-stock">17 en stock</p>
+     *  2) input.qty[max] más alto (productos con variaciones tienen varios inputs;
+     *     el primero suele ser el del producto base sin max)
+     *  3) <p class="wd-product-stock">17 en stock</p> o "sin stock"
+     *  4) Texto "N disponible" / "N en stock" en la card
      */
     protected function extractStock(DOMXPath $xpath, DOMNode $node, ?array $gtmJson): ?int
     {
-        // 1) gtm4wp
-        if (is_array($gtmJson) && isset($gtmJson['stocklevel'])) {
+        // 1) gtm4wp (validar que el valor sea numérico, no string vacío)
+        if (is_array($gtmJson) && isset($gtmJson['stocklevel']) && $gtmJson['stocklevel'] !== '' && $gtmJson['stocklevel'] !== null) {
             return (int) $gtmJson['stocklevel'];
         }
 
-        // 2) input.qty[max]
-        $inputNode = $this->firstOf($xpath, './/input[contains(@class, "qty")]', $node);
-        if ($inputNode instanceof DOMElement) {
-            $max = $inputNode->getAttribute('max');
-            if ($max !== '' && is_numeric($max)) {
-                return (int) $max;
+        // 2) input.qty[max] — tomar el max más alto entre todos los inputs
+        //    (el primero suele ser el del producto base sin max en productos con variaciones)
+        $inputNodes = $xpath->query('.//input[contains(@class, "qty")]', $node);
+        $maxValue   = 0;
+        if ($inputNodes !== false) {
+            foreach ($inputNodes as $input) {
+                if (! $input instanceof DOMElement) {
+                    continue;
+                }
+                $max = $input->getAttribute('max');
+                if ($max !== '' && is_numeric($max) && (int) $max > $maxValue) {
+                    $maxValue = (int) $max;
+                }
             }
         }
+        if ($maxValue > 0) {
+            return $maxValue;
+        }
 
-        // 3) Texto "X en stock" / "sin stock"
+        // 3) <p class="wd-product-stock">N en stock</p> o "sin stock"
         $stockNode = $this->firstOf($xpath, './/p[contains(@class, "wd-product-stock")]', $node);
         if ($stockNode instanceof DOMElement) {
             $text = $this->cleanText($stockNode->textContent);
-            if (preg_match('/(\d+)\s*(en stock|disponibles?|available|in stock)/i', $text, $matches)) {
-                return (int) $matches[1];
+            if ($text !== null) {
+                if (preg_match('/(\d+)\s*(en stock|disponibles?|available|in stock)/i', $text, $matches)) {
+                    return (int) $matches[1];
+                }
+                if (preg_match('/(sin stock|out of stock|agotado|sin disponibilidad)/i', $text)) {
+                    return 0;
+                }
             }
-            if (preg_match('/(sin stock|out of stock|agotado|sin disponibilidad)/i', $text)) {
-                return 0;
+        }
+
+        // 4) Texto "N disponible" en la card (caso Daz)
+        $textContent = $this->cleanText($node->textContent);
+        if ($textContent !== null) {
+            if (preg_match('/\b(\d+)\s*disponibles?\b/i', $textContent, $m)
+                || preg_match('/\b(\d+)\s*en\s*stock\b/i', $textContent, $m)) {
+                return (int) $m[1];
             }
         }
 
         return null;
+    }
+
+    /**
+     * Scrapea la página de DETALLE de un producto y devuelve el stock real.
+     *
+     * A diferencia de extractStock() (que parsea la card del LISTADO), este método
+     * carga la URL individual del producto y extrae stock de la página completa,
+     * que suele ser más preciso.
+     *
+     * Prioridad:
+     *   1) gtm4wp_productdata (JSON embebido con stocklevel) — más confiable
+     *   2) <p class="wd-product-stock">N en stock</p>      — texto humano
+     *   3) Texto "sin stock" / "out of stock" / "agotado"  — stock=0
+     *   4) input.qty[max] del producto principal            — último fallback
+     *
+     * NOTA sobre input.qty: en productos CON variaciones, Woodmart genera varios
+     * inputs .qty (uno por cada variación, con su max=stock de esa variación).
+     * El input "principal" (sin variación seleccionada) puede NO tener max.
+     * Tomamos el max MÁS ALTO entre los inputs con max, asumiendo que es la
+     * variante con más stock, que suele ser el producto por defecto.
+     *
+     * Implementado para Daz y Tuc (que extienden esta clase). Tero tiene su
+     * propio fetchProductDetail() con lógica distinta (JSON-LD + HTML embebido).
+     *
+     * @return array{stock: int|null, stock_source: string|null}
+     */
+    public function fetchProductDetail(string $url): array
+    {
+        $body = $this->httpGet($url);
+        [, $xpath] = $this->loadHtmlFragment($body);
+
+        $stock       = null;
+        $stockSource = null;
+
+        // 1) gtm4wp_productdata (JSON embebido en <span class="gtm4wp_productdata">)
+        $gtmNode = $this->firstOf($xpath, '//span[contains(@class, "gtm4wp_productdata")]');
+        if ($gtmNode instanceof DOMElement) {
+            $rawText = $this->cleanText($gtmNode->textContent);
+            $json    = is_string($rawText) ? json_decode($rawText, true) : null;
+            if (is_array($json) && isset($json['stocklevel'])
+                && $json['stocklevel'] !== '' && $json['stocklevel'] !== null) {
+                $stock       = (int) $json['stocklevel'];
+                $stockSource = 'jsonld';
+            }
+        }
+
+        // 2) <p class="wd-product-stock">N en stock</p> o "sin stock"
+        if ($stock === null) {
+            $stockNode = $this->firstOf($xpath, '//p[contains(@class, "wd-product-stock")]');
+            if ($stockNode instanceof DOMElement) {
+                $text = $this->cleanText($stockNode->textContent);
+                if ($text !== null) {
+                    if (preg_match('/(\d+)\s*(en stock|disponibles?|available|in stock)/i', $text, $m)) {
+                        $stock       = (int) $m[1];
+                        $stockSource = 'text';
+                    } elseif (preg_match('/(sin stock|out of stock|agotado|sin disponibilidad)/i', $text)) {
+                        $stock       = 0;
+                        $stockSource = 'text';
+                    }
+                }
+            }
+        }
+
+        // 3) Buscar "N disponible" o "N en stock" en el body (caso Daz: "1 disponible"
+        //    en texto libre, sin la clase estándar). También "sin stock" general.
+        if ($stock === null) {
+            if (preg_match('/\b(\d+)\s*disponibles?\b/i', $body, $m)
+                || preg_match('/\b(\d+)\s*en\s*stock\b/i', $body, $m)) {
+                $stock       = (int) $m[1];
+                $stockSource = 'text';
+            } elseif (preg_match('/\b(sin stock|out of stock|agotado|sin disponibilidad)\b/i', $body)) {
+                $stock       = 0;
+                $stockSource = 'text';
+            }
+        }
+
+        // 4) input.qty[max] (último recurso — ver nota en docblock sobre variaciones)
+        if ($stock === null) {
+            $inputNodes = $xpath->query('//input[contains(@class, "qty")]');
+            $maxValue   = 0;
+            if ($inputNodes !== false) {
+                foreach ($inputNodes as $input) {
+                    if (! $input instanceof DOMElement) {
+                        continue;
+                    }
+                    $max = $input->getAttribute('max');
+                    if ($max !== '' && is_numeric($max) && (int) $max > $maxValue) {
+                        $maxValue = (int) $max;
+                    }
+                }
+            }
+            if ($maxValue > 0) {
+                $stock       = $maxValue;
+                $stockSource = 'input_max';
+            }
+        }
+
+        return [
+            'stock'        => $stock,
+            'stock_source' => $stockSource,
+        ];
     }
 
     /**
@@ -539,9 +544,9 @@ abstract class BaseWoodmartScraper
 
         $priceNodes = $xpath->query('.//span[contains(@class, "woocommerce-Price-amount")]', $node);
         if ($priceNodes !== false && $priceNodes->length > 0) {
-            $listPrice = $this->extractPriceAmount($priceNodes->item(0)->textContent);
+            $listPrice = $this->parsePriceAmount($priceNodes->item(0)->textContent);
             if ($priceNodes->length > 1) {
-                $cashPrice = $this->extractPriceAmount($priceNodes->item(1)->textContent);
+                $cashPrice = $this->parsePriceAmount($priceNodes->item(1)->textContent);
             } else {
                 // Si solo hay un precio, ese es el efectivo (no hay lista)
                 $cashPrice = $listPrice;
@@ -578,7 +583,7 @@ abstract class BaseWoodmartScraper
         if ($categoryNodes !== false) {
             foreach ($categoryNodes as $catNode) {
                 $catName = $this->cleanText($catNode->textContent);
-                if ($catName !== '') {
+                if ($catName !== null && $catName !== '') {
                     $categories[] = $catName;
                 }
             }
@@ -594,116 +599,9 @@ abstract class BaseWoodmartScraper
     {
         $brandNode = $this->firstOf($xpath, './/div[contains(@class, "wd-product-brands-links")]//a', $node);
         if ($brandNode instanceof DOMElement) {
-            return $this->cleanText($brandNode->textContent) ?: null;
+            $brand = $this->cleanText($brandNode->textContent);
+            return $brand !== '' ? $brand : null;
         }
         return null;
-    }
-
-    // ============================================================
-    //  Helpers
-    // ============================================================
-
-    /**
-     * Primer nodo que matchea el query (opcionalmente scoped a un contexto).
-     */
-    protected function firstOf(DOMXPath $xpath, string $query, ?DOMNode $context = null)
-    {
-        $result = $context
-            ? $xpath->query($query, $context)
-            : $xpath->query($query);
-
-        if ($result === false || $result->length === 0) {
-            return null;
-        }
-        return $result->item(0);
-    }
-
-    /**
-     * Normaliza una URL: si es relativa la completa con baseUrl.
-     */
-    protected function resolveUrl(?string $url): ?string
-    {
-        if ($url === null || $url === '') {
-            return null;
-        }
-
-        if (preg_match('#^https?://#i', $url)) {
-            return $url;
-        }
-
-        if (str_starts_with($url, '//')) {
-            return 'https:' . $url;
-        }
-
-        if (str_starts_with($url, '/')) {
-            return $this->baseUrl . $url;
-        }
-
-        return $this->baseUrl . '/' . $url;
-    }
-
-    /**
-     * Extrae un número de un string con formato AR o US.
-     * Detecta automáticamente:
-     *  - "$ 4.200"      → 4200    (AR: miles con punto, sin decimales)
-     *  - "$ 4.200,50"   → 4200.5  (AR: miles con punto, decimal con coma)
-     *  - "$20,500.00"   → 20500   (US: miles con coma, decimal con punto)
-     *  - "$ 1.234.567"  → 1234567 (AR: solo puntos, varios)
-     *  - "$ 1,234,567"  → 1234567 (US: solo comas, varias)
-     *  - "$4.7"         → 4.7     (decimal, sin ambigüedad)
-     *
-     * Heurística: si están ambos, el de la DERECHA es el decimal.
-     */
-    protected function extractPriceAmount(string $text): ?float
-    {
-        $cleaned = preg_replace('/[^\d.,\-]/', '', $text);
-        if ($cleaned === null || $cleaned === '') {
-            return null;
-        }
-
-        $hasComma = str_contains($cleaned, ',');
-        $hasDot = str_contains($cleaned, '.');
-
-        if ($hasComma && $hasDot) {
-            $lastComma = strrpos($cleaned, ',');
-            $lastDot = strrpos($cleaned, '.');
-            if ($lastComma > $lastDot) {
-                // AR format: 1.234,56
-                $cleaned = str_replace('.', '', $cleaned);
-                $cleaned = str_replace(',', '.', $cleaned);
-            } else {
-                // US format: 1,234.56
-                $cleaned = str_replace(',', '', $cleaned);
-            }
-        } elseif ($hasComma) {
-            $parts = explode(',', $cleaned);
-            if (count($parts) > 2 || strlen(end($parts)) === 3) {
-                $cleaned = str_replace(',', '', $cleaned);
-            } else {
-                $cleaned = str_replace(',', '.', $cleaned);
-            }
-        } elseif ($hasDot) {
-            $parts = explode('.', $cleaned);
-            if (count($parts) > 2 || strlen(end($parts)) === 3) {
-                $cleaned = str_replace('.', '', $cleaned);
-            }
-        }
-
-        if (! is_numeric($cleaned)) {
-            return null;
-        }
-
-        return (float) $cleaned;
-    }
-
-    /**
-     * Limpia espacios y saltos de línea.
-     */
-    protected function cleanText(?string $text): string
-    {
-        if ($text === null) {
-            return '';
-        }
-        return trim(preg_replace('/\s+/', ' ', $text) ?? '');
     }
 }

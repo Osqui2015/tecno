@@ -41,9 +41,9 @@ class ProductController extends Controller
             $query->search($searchTerm);
         }
 
-        // 2) Categoría
+        // 2) Categoría (incluye tanto category_id principal como categories_external)
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
+            $query->inCategory($request->integer('category_id'));
         }
 
         // 3) Marca

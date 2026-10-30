@@ -35,6 +35,7 @@ class Product extends Model
         'markup_percent',
         'stock',
         'image',
+        'gallery',
         'brand',
         'source_url',
         'categories_external',
@@ -53,6 +54,7 @@ class Product extends Model
         'stock'             => 'integer',
         'active'            => 'boolean',
         'categories_external' => 'array',
+        'gallery'           => 'array',
         'last_seen_at'      => 'datetime',
         'last_updated_at'   => 'datetime',
         'missing_since'     => 'datetime',
@@ -320,6 +322,22 @@ class Product extends Model
             $q->where('name', 'like', "%{$term}%")
               ->orWhere('description', 'like', "%{$term}%")
               ->orWhere('sku', 'like', "%{$term}%");
+        });
+    }
+
+    /**
+     * Filtra productos que pertenezcan a la categoría indicada, ya sea como
+     * `category_id` principal o dentro del array `categories_external`.
+     */
+    public function scopeInCategory(Builder $query, int $categoryId): Builder
+    {
+        $categoryName = Category::where('id', $categoryId)->value('name');
+
+        return $query->where(function (Builder $q) use ($categoryId, $categoryName) {
+            $q->where('category_id', $categoryId);
+            if ($categoryName !== null && $categoryName !== '') {
+                $q->orWhereJsonContains('categories_external', $categoryName);
+            }
         });
     }
 

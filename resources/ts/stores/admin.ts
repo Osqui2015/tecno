@@ -15,7 +15,7 @@ import type { Order } from './orders';
 
 export interface AdminProductFilters {
     search?: string;
-    source?: 'daz' | 'tuc' | 'manual';
+    source?: 'daz' | 'tuc' | 'tero' | 'manual';
     category_id?: number;
     active?: boolean;
     stock_status?: 'in_stock' | 'out_of_stock';
@@ -27,7 +27,7 @@ export interface AdminProductFilters {
 export interface AdminOrderFilters {
     search?: string;
     status?: string;
-    source?: 'daz' | 'tuc' | 'manual' | 'mixed';
+    source?: 'daz' | 'tuc' | 'tero' | 'manual' | 'mixed';
     user_id?: number;
     date_from?: string;
     date_to?: string;
@@ -146,7 +146,7 @@ export const useAdminStore = defineStore('admin', () => {
     async function bulkMarkup(payload: {
         percent: number;
         product_ids?: number[];
-        source?: 'daz' | 'tuc' | 'manual';
+        source?: 'daz' | 'tuc' | 'tero' | 'manual';
         category_id?: number;
     }): Promise<boolean> {
         loading.value = true;

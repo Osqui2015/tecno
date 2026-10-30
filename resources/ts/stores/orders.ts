@@ -40,9 +40,10 @@ export interface Order {
     whatsapp_last_sent_at?: string | null;
     created_at: string;
     items: OrderItem[];
-    origin_label?: 'daz' | 'tuc' | 'manual' | 'mixed' | 'empty';
+    origin_label?: 'daz' | 'tuc' | 'tero' | 'manual' | 'mixed' | 'empty';
     items_count_daz?: number;
     items_count_tuc?: number;
+    items_count_tero?: number;
     items_count_manual?: number;
 }
 

@@ -137,6 +137,14 @@ class Order extends Model
     }
 
     /**
+     * Cantidad de items del pedido cuyo producto es de Teromatero.
+     */
+    public function getItemsCountTeroAttribute(): int
+    {
+        return $this->items->filter(fn ($i) => $i->product?->origin === 'tero')->count();
+    }
+
+    /**
      * Cantidad de items del pedido cuyo producto es manual.
      */
     public function getItemsCountManualAttribute(): int
@@ -145,17 +153,19 @@ class Order extends Model
     }
 
     /**
-     * Etiqueta legible del origen: 'daz' | 'tuc' | 'manual' | 'mixed'.
+     * Etiqueta legible del origen: 'daz' | 'tuc' | 'tero' | 'manual' | 'mixed'.
      */
     public function getOriginLabelAttribute(): string
     {
         $daz    = $this->items_count_daz;
         $tuc    = $this->items_count_tuc;
+        $tero   = $this->items_count_tero;
         $manual = $this->items_count_manual;
 
         $origins = [];
         if ($daz > 0) $origins[] = 'daz';
         if ($tuc > 0) $origins[] = 'tuc';
+        if ($tero > 0) $origins[] = 'tero';
         if ($manual > 0) $origins[] = 'manual';
 
         if (count($origins) === 1) {

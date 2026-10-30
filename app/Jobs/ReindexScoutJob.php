@@ -29,8 +29,8 @@ class ReindexScoutJob implements ShouldQueue
         $count = Product::query()->where('active', true)->count();
         Log::info("ReindexScoutJob: reindexando {$count} productos activos");
 
-        Artisan::call('scout:flush', ['searchable' => Product::class]);
-        Artisan::call('scout:import', ['searchable' => Product::class]);
+        Artisan::call('scout:flush', ['model' => Product::class]);
+        Artisan::call('scout:import', ['model' => Product::class]);
 
         Log::info('ReindexScoutJob: finalizado');
     }

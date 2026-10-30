@@ -44,6 +44,8 @@ class ScrapeProductsJob implements ShouldQueue
         public readonly int $delaySeconds = 1,
         public readonly bool $fresh = false,
         public readonly bool $hideMissing = true,
+        public readonly bool $doDetail = false,
+        public readonly float $detailDelay = 0.3,
     ) {
     }
 
@@ -113,6 +115,12 @@ class ScrapeProductsJob implements ShouldQueue
                 ]);
         }
 
+        // Detail-pass opcional (--detail)
+        $detailStats = ['enriched' => 0, 'stock_updated' => 0, 'errors' => 0];
+        if ($this->doDetail && ! empty($allProducts)) {
+            $detailStats = $this->enrichWithDetail($scraper, $allProducts);
+        }
+
         Log::info("ScrapeProductsJob: {$this->origin} finalizado", [
             'pages'             => $result['stats']['pages'],
             'created'           => $stats['created'],
@@ -120,7 +128,84 @@ class ScrapeProductsJob implements ShouldQueue
             'hidden'            => $hidden,
             'new_categories'    => $stats['new_categories'],
             'errors'            => count($result['errors']),
+            'detail_enriched'   => $detailStats['enriched'],
+            'detail_stock'      => $detailStats['stock_updated'],
+            'detail_errors'     => $detailStats['errors'],
         ]);
+    }
+
+    /**
+     * Detail-pass desde el job (sin progress bar — solo loguea).
+     */
+    private function enrichWithDetail(BaseWoodmartScraper $scraper, array $products): array
+    {
+        $stats = ['enriched' => 0, 'stock_updated' => 0, 'errors' => 0];
+        $total = count($products);
+        Log::info("ScrapeProductsJob[{$this->origin}]: detail-pass de {$total} productos");
+
+        foreach ($products as $i => $p) {
+            $sourceUrl  = $p['source_url'] ?? null;
+            $externalId = $p['external_id'] ?? null;
+            if (! $sourceUrl || ! $externalId) {
+                continue;
+            }
+
+            $product = Product::where('external_id', $externalId)
+                ->where('origin', $this->origin)
+                ->first();
+
+            try {
+                $detail = $scraper->fetchProductDetail($sourceUrl);
+            } catch (\Throwable $e) {
+                $stats['errors']++;
+                Log::warning("ScrapeProductsJob[{$this->origin}] detail error", [
+                    'external_id' => $externalId,
+                    'error'       => $e->getMessage(),
+                ]);
+                if ($this->detailDelay > 0) {
+                    usleep((int) ($this->detailDelay * 1_000_000));
+                }
+                continue;
+            }
+
+            $updates = [];
+            if ($detail['stock'] !== null) {
+                $newStock     = (int) $detail['stock'];
+                $currentStock = $product ? (int) $product->stock : null;
+
+                if ($currentStock === null || $currentStock === 0) {
+                    $updates['stock'] = $newStock;
+                    if ($newStock > 0) {
+                        $updates['active'] = true;
+                    }
+                } elseif ($newStock < $currentStock) {
+                    $updates['stock'] = $newStock;
+                    $stats['stock_updated']++;
+                }
+
+                if ($newStock === 0 && (! $product || $product->active)) {
+                    $updates['active'] = false;
+                }
+            }
+
+            if (! empty($updates) && $product) {
+                $updates['last_updated_at'] = now();
+                $product->forceFill($updates);
+                $product->save();
+                $stats['enriched']++;
+            }
+
+            if ($this->detailDelay > 0) {
+                usleep((int) ($this->detailDelay * 1_000_000));
+            }
+
+            // Log cada 50 productos para tener feedback sin spam
+            if (($i + 1) % 50 === 0) {
+                Log::info("ScrapeProductsJob[{$this->origin}]: detail " . ($i + 1) . "/{$total}");
+            }
+        }
+
+        return $stats;
     }
 
     /**
@@ -160,11 +245,15 @@ class ScrapeProductsJob implements ShouldQueue
                     continue;
                 }
 
-                $isOutOfStock = $p['stock'] !== null && $p['stock'] <= 0;
+                $isOutOfStock = $p['stock'] === null || $p['stock'] <= 0;
+                $finalStock   = $p['stock'] !== null ? (int) $p['stock'] : 0;
 
                 $categoryId = null;
                 if (! empty($p['categories_external'])) {
                     $firstCat = $p['categories_external'][0] ?? null;
+                    if ($firstCat === 'Temporada' && ! empty($p['categories_external'][1])) {
+                        $firstCat = $p['categories_external'][1];
+                    }
                     if ($firstCat) {
                         if (! isset($categoryCache[$firstCat])) {
                             $catSlug = Str::slug($firstCat);
@@ -194,7 +283,7 @@ class ScrapeProductsJob implements ShouldQueue
                     'name'                => $p['name'],
                     'image'               => $p['image'],
                     'sku'                 => $p['sku'],
-                    'stock'               => $isOutOfStock ? 0 : (int) $p['stock'],
+                    'stock'               => $finalStock,
                     'list_price'          => $p['list_price'],
                     'cash_price'          => $p['cash_price'],
                     'price'               => $p['price'] ?? ($p['cash_price'] ?? $p['list_price']),

@@ -31,6 +31,8 @@ class ProductController extends Controller
                 $query->fromDaz();
             } elseif ($source === 'tuc') {
                 $query->fromTuc();
+            } elseif ($source === 'tero') {
+                $query->where('origin', 'tero');
             } elseif ($source === 'manual') {
                 $query->manual();
             }
@@ -38,7 +40,7 @@ class ProductController extends Controller
         // Si no se pasa source, se muestran todos los productos (de cualquier origen).
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
+            $query->inCategory($request->integer('category_id'));
         }
 
         if ($request->filled('active')) {
@@ -286,7 +288,7 @@ class ProductController extends Controller
             'percent'     => 'required|numeric|min:0|max:999.99',
             'product_ids' => 'sometimes|array',
             'product_ids.*' => 'integer|exists:products,id',
-            'source'      => ['sometimes', Rule::in(['daz', 'tuc', 'manual'])],
+            'source'      => ['sometimes', Rule::in(['daz', 'tuc', 'tero', 'manual'])],
             'category_id' => 'sometimes|integer|exists:categories,id',
         ]);
 
@@ -300,6 +302,8 @@ class ProductController extends Controller
                     $query->fromDaz();
                 } elseif ($data['source'] === 'tuc') {
                     $query->fromTuc();
+                } elseif ($data['source'] === 'tero') {
+                    $query->where('origin', 'tero');
                 } else {
                     $query->manual();
                 }

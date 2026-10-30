@@ -9,7 +9,7 @@ const admin = useAdminStore();
 const filters = reactive({
     search: '',
     status: '',
-    source: '' as '' | 'daz' | 'tuc' | 'manual' | 'mixed',
+    source: '' as '' | 'daz' | 'tuc' | 'tero' | 'manual' | 'mixed',
     page: 1,
     per_page: 25,
 });
@@ -59,6 +59,7 @@ function statusInfo(status: string) {
 function originBadge(label?: string) {
     if (label === 'daz')    return { label: 'Daz',    cls: 'chip-info' };
     if (label === 'tuc')    return { label: 'Tuc',    cls: 'chip-brand' };
+    if (label === 'tero')   return { label: 'Tero',   cls: 'chip-success' };
     if (label === 'manual') return { label: 'Manual', cls: 'chip-muted' };
     if (label === 'mixed')  return { label: 'Mixto',  cls: 'chip-warning' };
     return { label: '—', cls: 'chip-muted' };

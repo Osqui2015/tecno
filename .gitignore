@@ -25,3 +25,8 @@ Thumbs.db
 # AI assistant tooling (no es parte del proyecto)
 /.agents
 /skills-lock.json
+# Scripts de debug temporales del desarrollo
+/scripts/_debug/
+# HTMLs descargados para análisis de scrapers
+/storage/app/_debug/
+/storage/app/scrape-debug/

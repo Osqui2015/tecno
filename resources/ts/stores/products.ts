@@ -5,7 +5,7 @@ import axios from '@/bootstrap';
 export interface Product {
     id: number;
     external_id?: string | null;
-    origin?: 'daz' | 'tuc' | 'manual' | null;
+    origin?: 'daz' | 'tuc' | 'tero' | 'manual' | null;
     sku?: string | null;
     name: string;
     slug: string;

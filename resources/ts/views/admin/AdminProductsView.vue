@@ -16,7 +16,7 @@ const hideLowStock = ref(true);
 
 const filters = reactive({
     search: '',
-    source: 'daz' as '' | 'daz' | 'tuc' | 'manual',
+    source: 'daz' as '' | 'daz' | 'tuc' | 'tero' | 'manual',
     stock_status: '' as '' | 'in_stock' | 'out_of_stock',
     active: '' as '' | 'true' | 'false',
     page: 1,
@@ -26,7 +26,7 @@ const filters = reactive({
 const showBulkModal = ref(false);
 const bulkForm = reactive({
     percent: 25,
-    scope: 'all' as 'all' | 'daz' | 'tuc' | 'manual' | 'category',
+    scope: 'all' as 'all' | 'daz' | 'tuc' | 'tero' | 'manual' | 'category',
     category_id: null as number | null,
 });
 
@@ -128,7 +128,7 @@ onUnmounted(() => {
 
 async function applyBulkMarkup() {
     const payload: any = { percent: bulkForm.percent };
-    if (bulkForm.scope === 'daz' || bulkForm.scope === 'tuc' || bulkForm.scope === 'manual') {
+    if (bulkForm.scope === 'daz' || bulkForm.scope === 'tuc' || bulkForm.scope === 'tero' || bulkForm.scope === 'manual') {
         payload.source = bulkForm.scope;
     } else if (bulkForm.scope === 'category' && bulkForm.category_id) {
         payload.category_id = bulkForm.category_id;
@@ -212,6 +212,7 @@ async function uploadCsv() {
                 <select v-model="filters.source" class="input max-w-[160px]">
                     <option value="daz">Catálogo Daz</option>
                     <option value="tuc">Catálogo TusTecnología</option>
+                    <option value="tero">Catálogo Teromatero</option>
                     <option value="manual">Productos manuales</option>
                 </select>
                 <select v-model="filters.stock_status" class="input max-w-[160px]">
@@ -334,6 +335,7 @@ async function uploadCsv() {
                             <td class="px-4 py-3">
                                 <span v-if="p.origin === 'daz'" class="chip chip-info text-[10px]">Daz</span>
                                 <span v-else-if="p.origin === 'tuc'" class="chip chip-brand text-[10px]">TusTec-Tuc</span>
+                                <span v-else-if="p.origin === 'tero'" class="chip chip-success text-[10px]">Teromatero</span>
                                 <span v-else class="chip chip-muted text-[10px]">Manual</span>
                             </td>
                             <td class="px-4 py-3">

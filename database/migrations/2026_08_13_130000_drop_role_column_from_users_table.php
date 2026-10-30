@@ -13,24 +13,26 @@ return new class extends Migration
         // Antes de dropear, nos aseguramos de que TODOS los users tengan
         // un role Spatie equivalente. Si no lo tienen, se lo asignamos.
         // Esto evita perder permisos al dropear la columna.
-        $users = DB::table('users')->whereNotNull('role')->get();
-        foreach ($users as $u) {
-            if (! $u->role) {
-                continue;
-            }
-            $role = Role::firstOrCreate(['name' => $u->role, 'guard_name' => 'web']);
-            // Asignar solo si no lo tiene ya (idempotente)
-            $exists = DB::table('model_has_roles')
-                ->where('model_id', $u->id)
-                ->where('model_type', \App\Models\User::class)
-                ->where('role_id', $role->id)
-                ->exists();
-            if (! $exists) {
-                DB::table('model_has_roles')->insert([
-                    'role_id'    => $role->id,
-                    'model_type' => \App\Models\User::class,
-                    'model_id'   => $u->id,
-                ]);
+        if (Schema::hasColumn('users', 'role')) {
+            $users = DB::table('users')->whereNotNull('role')->get();
+            foreach ($users as $u) {
+                if (! $u->role) {
+                    continue;
+                }
+                $role = Role::firstOrCreate(['name' => $u->role, 'guard_name' => 'web']);
+                // Asignar solo si no lo tiene ya (idempotente)
+                $exists = DB::table('model_has_roles')
+                    ->where('model_id', $u->id)
+                    ->where('model_type', \App\Models\User::class)
+                    ->where('role_id', $role->id)
+                    ->exists();
+                if (! $exists) {
+                    DB::table('model_has_roles')->insert([
+                        'role_id'    => $role->id,
+                        'model_type' => \App\Models\User::class,
+                        'model_id'   => $u->id,
+                    ]);
+                }
             }
         }
 

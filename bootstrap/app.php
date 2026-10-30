@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         App\Console\Commands\ScrapeDazProducts::class,
+        App\Console\Commands\ScrapeTeroProducts::class,
         App\Console\Commands\ScrapeTucProducts::class,
         App\Console\Commands\SyncAllProducts::class,
         App\Console\Commands\SyncLowStockProducts::class,

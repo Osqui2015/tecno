@@ -196,6 +196,7 @@ const eventLabel: Record<string, string> = {
                             Precio base
                             <span v-if="admin.currentProduct?.origin === 'daz'"> (Daz)</span>
                             <span v-else-if="admin.currentProduct?.origin === 'tuc'"> (TusTecnología)</span>
+                            <span v-else-if="admin.currentProduct?.origin === 'tero'"> (Teromatero)</span>
                             <span v-else> (Manual)</span>
                         </label>
                         <input v-model.number="form.price" type="number" step="0.01" min="0" class="input" />
@@ -203,6 +204,7 @@ const eventLabel: Record<string, string> = {
                             Lo que cuesta en
                             <span v-if="admin.currentProduct?.origin === 'daz'"> Daz.</span>
                             <span v-else-if="admin.currentProduct?.origin === 'tuc'"> TusTecnología.</span>
+                            <span v-else-if="admin.currentProduct?.origin === 'tero'"> Teromatero.</span>
                             <span v-else> origen.</span>
                         </p>
                     </div>
@@ -272,6 +274,11 @@ const eventLabel: Record<string, string> = {
                     <p class="text-[10px] font-extrabold uppercase tracking-wider text-amber-500 mb-1">Origen</p>
                     <p class="text-sm font-bold text-slate-800">Producto TusTecnología</p>
                     <p class="text-[11px] text-slate-500 mt-1">ID Tuc: <code>{{ admin.currentProduct.external_id }}</code></p>
+                </div>
+                <div v-else-if="admin.currentProduct?.origin === 'tero'" class="card p-5 bg-emerald-50/40 border-emerald-100">
+                    <p class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-500 mb-1">Origen</p>
+                    <p class="text-sm font-bold text-slate-800">Producto Teromatero</p>
+                    <p class="text-[11px] text-slate-500 mt-1">ID Tero: <code>{{ admin.currentProduct.external_id }}</code></p>
                 </div>
 
                 <!-- Historial de actualizaciones -->

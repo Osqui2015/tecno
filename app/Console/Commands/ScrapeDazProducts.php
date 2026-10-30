@@ -21,16 +21,21 @@ use Illuminate\Support\Str;
  *   php artisan daz:scrape --dry-run           No guarda, solo muestra qué traería
  *   php artisan daz:scrape --fresh              Vacía productos externos antes
  *   php artisan daz:scrape --category=hogar     Solo productos de esa categoría
+ *   php artisan daz:scrape --detail             Después del listado, scrapea la página
+ *                                              de detalle de cada producto para obtener
+ *                                              stock real (más preciso que el de la card).
  */
 class ScrapeDazProducts extends Command
 {
     protected $signature = 'daz:scrape
         {--pages=          : Limitar cantidad de páginas a scrapear (default: todas)}
         {--delay=1         : Segundos entre cada request (default: 1)}
+        {--detail-delay=0.3 : Segundos entre requests de detalle (default: 0.3)}
         {--dry-run         : Simular sin guardar en la base de datos}
         {--fresh           : Vaciar productos de origen externo antes de empezar}
         {--category=       : Filtrar productos por nombre de categoría externa}
         {--no-hide-missing : NO ocultar productos que no aparezcan en el scraping}
+        {--detail          : Después del listado, scrapear la página de detalle de cada producto}
         {--queue           : Despachar el scrape como Job en background (no bloquea la consola)}';
 
     protected $description = 'Scrapea productos desde dazimportadora.com.ar y los guarda/actualiza en la DB';
@@ -80,10 +85,12 @@ class ScrapeDazProducts extends Command
             ? (int) $this->option('pages')
             : null;
         $delay = (int) $this->option('delay');
+        $detailDelay = (float) $this->option('detail-delay');
         $dryRun = (bool) $this->option('dry-run');
         $fresh = (bool) $this->option('fresh');
         $categoryFilter = $this->option('category');
         $hideMissing = ! $this->option('no-hide-missing');
+        $doDetail = (bool) $this->option('detail');
 
         if ($maxPages !== null) {
             $this->warn("⚠️  Limitando a {$maxPages} página(s)");
@@ -91,6 +98,11 @@ class ScrapeDazProducts extends Command
 
         if ($dryRun) {
             $this->warn('🧪 MODO DRY-RUN: no se guardará nada en la DB');
+        }
+
+        if ($doDetail) {
+            $this->info('🔍 --detail activado: se va a scrapear el detalle de cada producto');
+            $this->info("   (delay entre detalles: {$detailDelay}s)");
         }
 
         if ($fresh && ! $dryRun) {
@@ -188,7 +200,13 @@ class ScrapeDazProducts extends Command
         }
 
         if ($dryRun) {
-            $this->showDryRunReport($allProducts, count($errors), microtime(true) - $startTime);
+            // En dry-run también corremos el detail-pass (sin guardar nada) para
+            // mostrar qué habría pasado si ejecutáramos de verdad.
+            $detailStats = [];
+            if ($doDetail && ! empty($allProducts)) {
+                $detailStats = $this->enrichWithDetail($allProducts, $detailDelay, true);
+            }
+            $this->showDryRunReport($allProducts, count($errors), microtime(true) - $startTime, $detailStats);
             return self::SUCCESS;
         }
 
@@ -230,6 +248,13 @@ class ScrapeDazProducts extends Command
                 ]);
         }
 
+        // Detail-pass opcional: si --detail está activo, scrapeamos cada producto
+        // individualmente para obtener stock real (más preciso que el de la card).
+        $detailStats = [];
+        if ($doDetail && ! empty($allProducts)) {
+            $detailStats = $this->enrichWithDetail($allProducts, $detailDelay, $dryRun);
+        }
+
         $elapsed = round(microtime(true) - $startTime, 2);
 
         $this->newLine();
@@ -254,6 +279,16 @@ class ScrapeDazProducts extends Command
                 ['⚠️  Errores', count($errors)],
             ]
         );
+
+        if (! empty($detailStats)) {
+            $this->newLine();
+            $this->info('🔍 Detail-pass:');
+            $this->line("   • {$detailStats['enriched']} productos enriquecidos");
+            $this->line("   • {$detailStats['stock_updated']} stocks corregidos desde la lista");
+            if ($detailStats['errors'] > 0) {
+                $this->warn("   • ❌ {$detailStats['errors']} errores (ver log)");
+            }
+        }
 
         if (! empty($errors)) {
             $this->newLine();
@@ -327,13 +362,22 @@ class ScrapeDazProducts extends Command
                     continue;
                 }
 
-                // Stock 0 o negativo: marcar pero igual guardar el producto
-                $isOutOfStock = $p['stock'] !== null && $p['stock'] <= 0;
+                // Stock:
+                //   - null  → no detectado en la card → conservador: ocultar (falso negativo conocido)
+                //   - <= 0  → detectado explícitamente como sin stock → ocultar
+                //   - > 0   → detectado con stock → mostrar
+                // Bug histórico: antes guardaba (int)null = 0 con active=true, marcando como "sin stock"
+                // productos que en realidad sí tienen stock.
+                $isOutOfStock = $p['stock'] === null || $p['stock'] <= 0;
+                $finalStock   = $p['stock'] !== null ? (int) $p['stock'] : 0;
 
-                // Resolver categoría principal (la primera del array externo)
+                // Resolver categoría principal (si la primera es genérica 'Temporada' y hay subcategoría como 'Navidad', priorizar la subcategoría)
                 $categoryId = null;
                 if (! empty($p['categories_external'])) {
                     $firstCat = $p['categories_external'][0] ?? null;
+                    if ($firstCat === 'Temporada' && ! empty($p['categories_external'][1])) {
+                        $firstCat = $p['categories_external'][1];
+                    }
                     if ($firstCat) {
                         if (! isset($categoryCache[$firstCat])) {
                             $catSlug = Str::slug($firstCat);
@@ -365,7 +409,7 @@ class ScrapeDazProducts extends Command
                     'name'                => $p['name'],
                     'image'               => $p['image'],
                     'sku'                 => $p['sku'],
-                    'stock'               => $isOutOfStock ? 0 : (int) $p['stock'],
+                    'stock'               => $finalStock,
                     'list_price'          => $p['list_price'],
                     'cash_price'          => $p['cash_price'],
                     'price'               => $p['price'] ?? ($p['cash_price'] ?? $p['list_price']),
@@ -431,7 +475,7 @@ class ScrapeDazProducts extends Command
     /**
      * Reporte del modo dry-run
      */
-    private function showDryRunReport(array $products, int $errors, float $elapsed): void
+    private function showDryRunReport(array $products, int $errors, float $elapsed, array $detailStats = []): void
     {
         $this->newLine();
         $this->info('🔮 DRY-RUN — no se guardó nada en la DB');
@@ -499,5 +543,124 @@ class ScrapeDazProducts extends Command
             $this->newLine();
             $this->warn("⚠️  {$errors} error(es) durante el scraping");
         }
+
+        if (! empty($detailStats)) {
+            $this->newLine();
+            $this->info('🔍 Detail-pass (simulado, no se guardó):');
+            $this->line("   • {$detailStats['enriched']} productos a enriquecer");
+            $this->line("   • {$detailStats['stock_updated']} stocks a bajar (sitio < BD)");
+            if ($detailStats['errors'] > 0) {
+                $this->warn("   • ❌ {$detailStats['errors']} errores (ver log)");
+            }
+        }
+    }
+
+    /**
+     * Detail-pass: scrapea la página individual de cada producto y actualiza:
+     *  - stock (CORRECCIÓN: si la lista tenía stock=0 falso negativo, o si el
+     *    detalle muestra un stock menor, se actualiza. NO sube el stock para
+     *    no pisar ventas pendientes.)
+     *
+     * Para Daz/Tuc el stock del listado es el de la card (`gtm4wp_productdata`),
+     * que a veces es null o está desactualizado. El detalle corrige estos casos.
+     *
+     * @param  array<int, array<string, mixed>>  $products  productos scrapeados del listado
+     * @param  float  $detailDelay  segundos entre cada request de detalle
+     * @param  bool   $dryRun       si es true, no guarda nada en la DB (solo simula)
+     * @return array<string, int>  estadísticas del detail-pass
+     */
+    private function enrichWithDetail(array $products, float $detailDelay, bool $dryRun = false): array
+    {
+        $stats = [
+            'enriched'     => 0,
+            'stock_updated' => 0,
+            'errors'       => 0,
+        ];
+
+        $this->newLine();
+        $this->info('🔍 Iniciando detail-pass de ' . count($products) . ' productos...'
+            . ($dryRun ? ' (DRY-RUN: no se guardará nada)' : ''));
+        $this->newLine();
+
+        $progressBar = $this->output->createProgressBar(count($products));
+        $progressBar->setFormat('   %current%/%max% [%bar%] %percent:3s%% ETA: %estimated:-6s% %elapsed:6s%');
+        $progressBar->start();
+
+        foreach ($products as $p) {
+            $progressBar->advance();
+            $sourceUrl   = $p['source_url'] ?? null;
+            $externalId  = $p['external_id'] ?? null;
+            if (! $sourceUrl || ! $externalId) {
+                continue;
+            }
+
+            $product = Product::where('external_id', $externalId)
+                ->where('origin', 'daz')
+                ->first();
+
+            try {
+                $detail = $this->scraper->fetchProductDetail($sourceUrl);
+            } catch (\Throwable $e) {
+                $stats['errors']++;
+                Log::warning('Daz detail-pass error', [
+                    'external_id' => $externalId,
+                    'url'         => $sourceUrl,
+                    'error'       => $e->getMessage(),
+                ]);
+                if ($detailDelay > 0) {
+                    usleep((int) ($detailDelay * 1_000_000));
+                }
+                continue;
+            }
+
+            $updates = [];
+
+            // Lógica de stock:
+            //   - Si el producto NO existe en la DB: usar el stock del sitio directamente.
+            //   - Si existe con stock=0 (probable falso negativo del listado): usar el real.
+            //   - Si existe con stock>0 y el sitio reporta MENOR: bajar.
+            //   - Si existe con stock>0 y el sitio reporta IGUAL o MAYOR: NO subir
+            //     (puede haber ventas pendientes que ya decrementaron el stock real).
+            if ($detail['stock'] !== null) {
+                $newStock     = (int) $detail['stock'];
+                $currentStock = $product ? (int) $product->stock : null;
+
+                if ($currentStock === null || $currentStock === 0) {
+                    // Producto nuevo o con stock=0 (falso negativo) → usar el real
+                    $updates['stock'] = $newStock;
+                    if ($newStock > 0) {
+                        $updates['active'] = true;
+                    }
+                } elseif ($newStock < $currentStock) {
+                    // Stock del sitio es menor → bajar
+                    $updates['stock'] = $newStock;
+                    $stats['stock_updated']++;
+                }
+                // Si newStock >= currentStock Y currentStock > 0, no tocamos (puede haber ventas)
+
+                if ($newStock === 0 && (! $product || $product->active)) {
+                    $updates['active'] = false;
+                }
+            }
+
+            if (! empty($updates) && ! $dryRun && $product) {
+                $updates['last_updated_at'] = now();
+                $product->forceFill($updates);
+                $product->save();
+                $stats['enriched']++;
+            } elseif (! empty($updates)) {
+                // En dry-run contamos como enriquecido pero no guardamos
+                $stats['enriched']++;
+            }
+
+            if ($detailDelay > 0) {
+                usleep((int) ($detailDelay * 1_000_000));
+            }
+        }
+
+        $progressBar->finish();
+        $this->newLine(2);
+
+        return $stats;
     }
 }
