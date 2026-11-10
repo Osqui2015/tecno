@@ -229,11 +229,13 @@ class ProductController extends Controller
 
         CacheHelper::flush(['products:public']);
 
+        $freshProduct = $product->fresh();
+
         $after = [
-            'price'          => (float) $product->fresh()->price,
-            'markup_percent' => (float) $product->fresh()->markup_percent,
-            'stock'          => (int) $product->fresh()->stock,
-            'active'         => (bool) $product->fresh()->active,
+            'price'          => (float) $freshProduct->price,
+            'markup_percent' => (float) $freshProduct->markup_percent,
+            'stock'          => (int) $freshProduct->stock,
+            'active'         => (bool) $freshProduct->active,
         ];
 
         // Audit log si cambió algo importante
@@ -415,8 +417,8 @@ class ProductController extends Controller
             return response()->json(['message' => 'No se pudo abrir el archivo CSV'], 422);
         }
 
-        // Leer primera línea (encabezados)
-        $headers = fgetcsv($handle, 2000, ',');
+        // Leer primera línea (encabezados) sin límite arbitrario de longitud
+        $headers = fgetcsv($handle, 0, ',');
         if (! $headers) {
             fclose($handle);
             return response()->json(['message' => 'El archivo CSV está vacío'], 422);
@@ -438,7 +440,9 @@ class ProductController extends Controller
 
         DB::transaction(function () use ($handle, $cleanHeaders, $validCategoryIds, &$createdCount, &$updatedCount, &$errorCount, &$errorSamples) {
             $lineNumber = 1; // header
-            while (($row = fgetcsv($handle, 2000, ',')) !== false) {
+            $headerCount = count($cleanHeaders);
+
+            while (($row = fgetcsv($handle, 0, ',')) !== false) {
                 $lineNumber++;
                 if (count($row) < 2) {
                     $errorCount++;
@@ -446,7 +450,14 @@ class ProductController extends Controller
                     continue;
                 }
 
-                $data = array_combine(array_slice($cleanHeaders, 0, count($row)), $row);
+                $rowCount = count($row);
+                if ($rowCount > $headerCount) {
+                    $row = array_slice($row, 0, $headerCount);
+                } elseif ($rowCount < $headerCount) {
+                    $row = array_pad($row, $headerCount, null);
+                }
+
+                $data = array_combine($cleanHeaders, $row);
 
                 $sku   = trim($data['sku'] ?? $data['code'] ?? '');
                 $name  = trim($data['nombre'] ?? $data['name'] ?? '');

@@ -91,6 +91,14 @@ class ProductUpdateHistory extends Model
         return $query->where('source', $source);
     }
 
+    /**
+     * Purga registros de historial más antiguos que $days días para evitar explosión de datos.
+     */
+    public static function pruneOlderThan(int $days = 60): int
+    {
+        return self::where('created_at', '<', now()->subDays($days))->delete();
+    }
+
     // ============== Accessors / helpers ==============
 
     /**

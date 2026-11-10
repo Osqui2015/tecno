@@ -301,6 +301,8 @@ class ScrapeDazProducts extends Command
             }
         }
 
+        \App\Support\CacheHelper::flush(['products:public']);
+
         $this->newLine();
         $this->info('🎉 Comando finalizado.');
 

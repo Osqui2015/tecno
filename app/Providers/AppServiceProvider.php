@@ -82,8 +82,12 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
-        // Escritura admin: 60 acciones por minuto (un admin activo no llega a esto)
+        // Escritura admin: 60 acciones por minuto para mutaciones (POST, PUT, PATCH, DELETE).
+        // Las peticiones GET/HEAD seguras no se limitan para no bloquear el dashboard.
         RateLimiter::for('admin-write', function (Request $request) {
+            if ($request->isMethodSafe()) {
+                return Limit::none();
+            }
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 

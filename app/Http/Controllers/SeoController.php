@@ -45,8 +45,17 @@ class SeoController extends Controller
     /**
      * GET /productos/{slug}/{id} (formato SEO-friendly opcional)
      */
-    public function productBySlug(string $slug, int $id): View
+    public function productBySlug(string $slug, int $id): View|\Illuminate\Http\RedirectResponse
     {
+        $product = Product::find($id);
+        if (! $product) {
+            return view('app');
+        }
+
+        if ($product->slug && $slug !== $product->slug) {
+            return redirect()->to(url("/productos/{$product->slug}/{$product->id}"), 301);
+        }
+
         return $this->product($id);
     }
 
@@ -71,7 +80,7 @@ class SeoController extends Controller
             'seoDescription'  => $category->description
                 ?: "Explorá nuestra selección de {$category->name} en Tecno-Rexs.",
             'seoImage'        => asset('icons/icon-512.png'),
-            'seoUrl'          => url("/productos/{$category->name}"),
+            'seoUrl'          => url("/productos/{$category->slug}"),
             'seoType'         => 'website',
         ]);
     }

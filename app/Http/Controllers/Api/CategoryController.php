@@ -16,7 +16,10 @@ class CategoryController extends Controller
 
     public function show(string $slug): JsonResponse
     {
-        $category = Category::where('slug', $slug)->firstOrFail();
+        $decoded = urldecode($slug);
+        $category = Category::where('slug', $decoded)
+            ->orWhere('name', $decoded)
+            ->firstOrFail();
         return response()->json($category);
     }
 

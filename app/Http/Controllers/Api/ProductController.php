@@ -32,13 +32,17 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Product::with('category')
-            ->active()
-            ->whereNotNull('external_id');
+            ->available();
 
-        // 1) Búsqueda por término
+        // 1) Búsqueda por término (utiliza Scout si hay driver configurado, fallback a LIKE)
         if ($request->filled('search')) {
             $searchTerm = $request->string('search')->toString();
-            $query->search($searchTerm);
+            if (config('scout.driver')) {
+                $scoutIds = Product::search($searchTerm)->keys()->all();
+                $query->whereIn('id', $scoutIds);
+            } else {
+                $query->search($searchTerm);
+            }
         }
 
         // 2) Categoría (incluye tanto category_id principal como categories_external)
@@ -61,9 +65,22 @@ class ProductController extends Controller
             $query->where('price', '<=', $request->float('max_price'));
         }
 
+        // 4.5) Origen / Fuente (daz | tuc | local / manual)
+        if ($request->filled('source') || $request->filled('origin')) {
+            $source = $request->string('source')->toString() ?: $request->string('origin')->toString();
+            if ($source === 'daz') {
+                $query->fromDaz();
+            } elseif ($source === 'tuc') {
+                $query->fromTuc();
+            } elseif ($source === 'local' || $source === 'manual') {
+                $query->manual();
+            }
+        }
+
         // 5) Ordenamiento
         $sortBy = $request->query('sort_by', 'name_asc');
         match ($sortBy) {
+            'featured'   => $query->orderByDesc('stock')->orderByDesc('created_at'),
             'price_asc'  => $query->orderBy('price', 'asc'),
             'price_desc' => $query->orderBy('price', 'desc'),
             'newest'     => $query->orderBy('created_at', 'desc'),
@@ -84,10 +101,25 @@ class ProductController extends Controller
             function () use ($query, $perPage, $request) {
                 $results = $query->paginate($perPage);
 
-                $availableBrands = Product::active()
-                    ->whereNotNull('external_id')
+                $brandsQuery = Product::available()
                     ->whereNotNull('brand')
-                    ->where('brand', '!=', '')
+                    ->where('brand', '!=', '');
+
+                if ($request->filled('category_id')) {
+                    $brandsQuery->inCategory($request->integer('category_id'));
+                }
+                if ($request->filled('source') || $request->filled('origin')) {
+                    $src = $request->string('source')->toString() ?: $request->string('origin')->toString();
+                    if ($src === 'daz') {
+                        $brandsQuery->fromDaz();
+                    } elseif ($src === 'tuc') {
+                        $brandsQuery->fromTuc();
+                    } elseif ($src === 'local' || $src === 'manual') {
+                        $brandsQuery->manual();
+                    }
+                }
+
+                $availableBrands = $brandsQuery
                     ->select('brand', DB::raw('count(*) as count'))
                     ->groupBy('brand')
                     ->orderBy('brand')
@@ -116,6 +148,7 @@ class ProductController extends Controller
             'search'      => $request->string('search')->toString(),
             'category_id' => $request->integer('category_id'),
             'brand'       => $request->string('brand')->toString(),
+            'source'      => $request->string('source')->toString() ?: $request->string('origin')->toString(),
             'min_price'   => $request->float('min_price'),
             'max_price'   => $request->float('max_price'),
             'sort_by'     => $sortBy,
@@ -162,30 +195,37 @@ class ProductController extends Controller
             $limit = 4;
         }
 
-        $base = Product::active()
-            ->where('id', '!=', $id)
-            ->where('stock', '>', 0);
-
-        // Si tiene categoría, priorizamos misma categoría. Si no, devolvemos cualquier otro.
-        $product = CacheHelper::remember(
-            "products:show:{$id}",
+        $related = CacheHelper::remember(
+            "products:related:{$id}:{$limit}",
             ['products:public'],
             self::CACHE_TTL_SECONDS,
-            fn () => Product::active()->find($id)
+            function () use ($id, $limit) {
+                $product = CacheHelper::remember(
+                    "products:show:{$id}",
+                    ['products:public'],
+                    self::CACHE_TTL_SECONDS,
+                    fn () => Product::with('category')->active()->find($id)
+                );
+
+                $query = Product::with('category')
+                    ->active()
+                    ->where('id', '!=', $id)
+                    ->where('stock', '>', 0);
+
+                if ($product && $product->category_id) {
+                    $query->where('category_id', $product->category_id);
+                }
+
+                return $query->orderByDesc('stock')
+                    ->orderBy('name')
+                    ->limit($limit)
+                    ->get();
+            }
         );
-
-        if ($product && $product->category_id) {
-            $base->where('category_id', $product->category_id);
-        }
-
-        $related = $base->orderByDesc('stock')
-            ->orderBy('name')
-            ->limit($limit)
-            ->get();
 
         return response()->json([
             'data' => $related,
-            'total' => $related->count(),
+            'total' => count($related),
         ]);
     }
 

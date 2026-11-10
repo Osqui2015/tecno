@@ -291,6 +291,8 @@ class ScrapeTeroProducts extends Command
             $this->showDryRunReport($allProducts, count($errors), microtime(true) - $startTime, $detailStats);
         }
 
+        \App\Support\CacheHelper::flush(['products:public']);
+
         $this->newLine();
         $this->info('🎉 Comando finalizado.');
 

@@ -65,6 +65,26 @@ class Product extends Model
      */
     protected $appends = ['final_price', 'image_url', 'is_from_daz'];
 
+    /**
+     * Invalida el cache de uno o varios productos.
+     *
+     * Necesario cuando se usan operaciones de query builder
+     * (`increment`, `decrement`, `updateQuietly`) que no disparan los
+     * eventos `saved`/`deleted` del modelo y, por lo tanto, no limpian
+     * el cache automáticamente (por ejemplo, al descontar stock en un
+     * checkout o al reponerlo al cancelar un pedido).
+     *
+     * @param  int|array<int, int>  $ids
+     */
+    public static function flushCacheFor(int|array $ids): void
+    {
+        foreach ((array) $ids as $id) {
+            \Illuminate\Support\Facades\Cache::forget("products:show:{$id}");
+        }
+
+        \App\Support\CacheHelper::flush(['products:public']);
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Product $product) {
@@ -74,24 +94,36 @@ class Product extends Model
             }
         });
 
-        // Regla de negocio: cualquier producto con stock < LOW_STOCK_THRESHOLD
-        // queda forzado a `active = false`. Se aplica tanto al crear como al
-        // actualizar, de modo que nadie pueda dejarlo activo con stock bajo.
-        // Para reactivar un producto hay que primero reponer stock.
+        // Regla de negocio: cualquier producto sin stock (stock <= 0)
+        // queda forzado a `active = false`. Los productos con stock bajo (1-4)
+        // permanecen activos para mostrar "¡Últimas N!" en el catálogo.
         static::saving(function (Product $product) {
-            if ($product->stock !== null && (int) $product->stock < self::LOW_STOCK_THRESHOLD) {
+            if ($product->stock !== null && (int) $product->stock <= 0) {
                 $product->active = false;
             }
-            // Marcar la última actualización en cada save (incluyendo creación).
-            // El historial detallado se registra en el hook `updated`/`created`.
-            $product->last_updated_at = now();
+
+            // Marcar last_updated_at solo si es creación o si cambian campos de contenido
+            // (evita que un cambio exclusivo de stock marque el contenido como actualizado).
+            if (! $product->exists) {
+                $product->last_updated_at = now();
+            } else {
+                $contentFields = [
+                    'name', 'description', 'price', 'list_price', 'cash_price',
+                    'brand', 'image', 'sku', 'category_id', 'markup_percent', 'active',
+                ];
+                if ($product->isDirty($contentFields)) {
+                    $product->last_updated_at = now();
+                }
+            }
         });
 
         // ─── Historial: producto nuevo ───
         static::created(function (Product $product) {
+            $coreFields = ['name', 'price', 'list_price', 'cash_price', 'stock', 'sku', 'origin', 'category_id', 'active'];
+            $fields = array_values(array_intersect($coreFields, array_keys($product->getAttributes())));
             $product->recordUpdateHistory(
                 event: \App\Models\ProductUpdateHistory::EVENT_CREATED,
-                changedFields: array_keys($product->getAttributes()),
+                changedFields: $fields,
             );
         });
 
@@ -133,13 +165,22 @@ class Product extends Model
             }
         });
 
-        // Invalidar el cache público del catálogo cuando se crea/actualiza/borra.
-        // Usamos el helper que cae a flush total si el driver no soporta tags.
-        static::saved(function () {
-            \App\Support\CacheHelper::flush(['products:public']);
+        // Invalidar el cache del producto individual y el del catálogo público.
+        // Si hay un scraping masivo en progreso, el catálogo se invalida una sola vez
+        // al finalizar el job para no vaciar el cache en cada save().
+        static::saved(function (Product $product) {
+            \Illuminate\Support\Facades\Cache::forget("products:show:{$product->id}");
+            $isScrape = app()->bound('scrape_in_progress') && (bool) app('scrape_in_progress');
+            if (! $isScrape) {
+                \App\Support\CacheHelper::flush(['products:public']);
+            }
         });
-        static::deleted(function () {
-            \App\Support\CacheHelper::flush(['products:public']);
+        static::deleted(function (Product $product) {
+            \Illuminate\Support\Facades\Cache::forget("products:show:{$product->id}");
+            $isScrape = app()->bound('scrape_in_progress') && (bool) app('scrape_in_progress');
+            if (! $isScrape) {
+                \App\Support\CacheHelper::flush(['products:public']);
+            }
         });
     }
 
@@ -192,9 +233,20 @@ class Product extends Model
         // Construir diff { campo: { before, after } }
         $changes = [];
         foreach ($changedFields as $field) {
+            $before = $this->getOriginal($field);
+            $after  = $this->getAttribute($field);
+
+            // Truncar textos largos para evitar explosión de tamaño en JSON
+            if (is_string($before) && strlen($before) > 255) {
+                $before = mb_substr($before, 0, 252) . '...';
+            }
+            if (is_string($after) && strlen($after) > 255) {
+                $after = mb_substr($after, 0, 252) . '...';
+            }
+
             $changes[$field] = [
-                'before' => $this->getOriginal($field),
-                'after'  => $this->getAttribute($field),
+                'before' => $before,
+                'after'  => $after,
             ];
         }
 
@@ -329,9 +381,15 @@ class Product extends Model
      * Filtra productos que pertenezcan a la categoría indicada, ya sea como
      * `category_id` principal o dentro del array `categories_external`.
      */
-    public function scopeInCategory(Builder $query, int $categoryId): Builder
+    public function scopeInCategory(Builder $query, int $categoryId, ?string $categoryName = null): Builder
     {
-        $categoryName = Category::where('id', $categoryId)->value('name');
+        if ($categoryName === null) {
+            $categoryName = \Illuminate\Support\Facades\Cache::remember(
+                "category:name:{$categoryId}",
+                3600,
+                fn () => Category::where('id', $categoryId)->value('name')
+            );
+        }
 
         return $query->where(function (Builder $q) use ($categoryId, $categoryName) {
             $q->where('category_id', $categoryId);
@@ -416,7 +474,7 @@ class Product extends Model
     /**
      * URL pública de la imagen.
      * - Si es http(s) externa (ej: dazimportadora) → se devuelve tal cual.
-     * - Si es path local viejo → null (placeholder en frontend).
+     * - Si es path local (ej: products/52.jpg o storage/...) → resuelve asset.
      */
     public function getImageUrlAttribute(): ?string
     {
@@ -426,6 +484,12 @@ class Product extends Model
         if (Str::startsWith($this->image, ['http://', 'https://'])) {
             return $this->image;
         }
-        return null;
+        if (Str::startsWith($this->image, 'products/')) {
+            return asset('storage/' . $this->image);
+        }
+        if (Str::startsWith($this->image, 'storage/')) {
+            return asset($this->image);
+        }
+        return asset($this->image);
     }
 }

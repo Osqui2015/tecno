@@ -34,32 +34,41 @@ class OrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Order::with(['items.product', 'user']);
+        $this->applyFilters($query, $request);
 
+        $perPage = min($request->integer('per_page', 25), 100);
+        $orders  = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json($orders);
+    }
+
+    /**
+     * Aplica los filtros unificados de búsqueda a las órdenes.
+     */
+    private function applyFilters($query, Request $request): void
+    {
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->toString());
         }
 
         if ($request->filled('source')) {
             $source = $request->string('source')->toString();
-            // Filtramos por IDs de orden según el origen de sus items.
-            $dazProductIds = Product::where('origin', 'daz')->pluck('id');
-            $tucProductIds = Product::where('origin', 'tuc')->pluck('id');
-            $manualProductIds = Product::where(function ($q) {
-                $q->whereNull('origin')->orWhere('origin', 'manual');
-            })->pluck('id');
 
             if ($source === 'daz') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $dazProductIds))
-                      ->whereDoesntHave('items', fn ($q) => $q->whereIn('product_id', $tucProductIds->merge($manualProductIds)));
+                $query->whereHas('items.product', fn ($q) => $q->where('origin', 'daz'))
+                      ->whereDoesntHave('items.product', fn ($q) => $q->where('origin', '!=', 'daz'));
             } elseif ($source === 'tuc') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $tucProductIds))
-                      ->whereDoesntHave('items', fn ($q) => $q->whereIn('product_id', $dazProductIds->merge($manualProductIds)));
+                $query->whereHas('items.product', fn ($q) => $q->where('origin', 'tuc'))
+                      ->whereDoesntHave('items.product', fn ($q) => $q->where('origin', '!=', 'tuc'));
+            } elseif ($source === 'tero') {
+                $query->whereHas('items.product', fn ($q) => $q->where('origin', 'tero'))
+                      ->whereDoesntHave('items.product', fn ($q) => $q->where('origin', '!=', 'tero'));
             } elseif ($source === 'manual') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $manualProductIds))
-                      ->whereDoesntHave('items', fn ($q) => $q->whereIn('product_id', $dazProductIds->merge($tucProductIds)));
+                $query->whereHas('items.product', fn ($q) => $q->where(fn ($sub) => $sub->whereNull('origin')->orWhere('origin', 'manual')))
+                      ->whereDoesntHave('items.product', fn ($q) => $q->whereNotNull('origin')->where('origin', '!=', 'manual'));
             } elseif ($source === 'mixed') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $dazProductIds->merge($tucProductIds)))
-                      ->whereHas('items', fn ($q) => $q->whereIn('product_id', $manualProductIds));
+                $query->whereHas('items.product', fn ($q) => $q->where('origin', 'daz'))
+                      ->whereHas('items.product', fn ($q) => $q->where('origin', '!=', 'daz'));
             }
         }
 
@@ -84,11 +93,6 @@ class OrderController extends Controller
         if ($request->filled('date_to')) {
             $query->where('created_at', '<=', $request->date('date_to'));
         }
-
-        $perPage = min($request->integer('per_page', 25), 100);
-        $orders  = $query->orderByDesc('created_at')->paginate($perPage);
-
-        return response()->json($orders);
     }
 
     /**
@@ -128,9 +132,23 @@ class OrderController extends Controller
                 && $oldStatus !== Order::STATUS_CANCELLED
                 && ($data['return_stock'] ?? true)
             ) {
+                $changedStockIds = [];
                 foreach ($order->items as $item) {
-                    $item->product()->increment('stock', $item->qty);
+                    $product = $item->product()->lockForUpdate()->first();
+                    if (! $product) {
+                        continue;
+                    }
+
+                    $wasOutOfStock = (int) $product->stock <= 0;
+                    $product->increment('stock', $item->qty);
+
+                    if ($wasOutOfStock && ! $product->active) {
+                        $product->updateQuietly(['active' => true]);
+                    }
+
+                    $changedStockIds[] = $product->id;
                 }
+                Product::flushCacheFor($changedStockIds);
             }
 
             // Si pasa de 'cancelled' a otro estado, opcionalmente re-descontar stock
@@ -140,11 +158,22 @@ class OrderController extends Controller
                 && $data['status'] !== Order::STATUS_CANCELLED
                 && ($data['return_stock'] ?? false) === false
             ) {
+                $changedStockIds = [];
                 foreach ($order->items as $item) {
-                    if ($item->product->stock >= $item->qty) {
-                        $item->product()->decrement('stock', $item->qty);
+                    $product = $item->product()->lockForUpdate()->first();
+                    if (! $product || $product->stock < $item->qty) {
+                        continue;
                     }
+
+                    $product->decrement('stock', $item->qty);
+
+                    if ($product->fresh()->stock <= 0) {
+                        $product->updateQuietly(['active' => false]);
+                    }
+
+                    $changedStockIds[] = $product->id;
                 }
+                Product::flushCacheFor($changedStockIds);
             }
 
             // Capturar valor original de admin_notes ANTES de modificar
@@ -184,11 +213,17 @@ class OrderController extends Controller
                 ]);
             }
 
-            // Enviar email al comprador si cambió el estado
+            // Enviar email al comprador si cambió el estado (después de commit)
             if ($statusChanged && $order->user && $order->user->email) {
-                Mail::to($order->user->email)->send(
-                    new OrderStatusChanged($order->fresh(), $oldStatus, $order->status)
-                );
+                $userEmail = $order->user->email;
+                $mailable = new OrderStatusChanged($order->fresh(), $oldStatus, $order->status);
+                DB::afterCommit(function () use ($userEmail, $mailable) {
+                    try {
+                        Mail::to($userEmail)->queue($mailable);
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudo encolar mail de cambio de estado: ' . $e->getMessage());
+                    }
+                });
             }
 
             return response()->json($order->fresh()->load(['items.product', 'user']));
@@ -197,15 +232,37 @@ class OrderController extends Controller
 
     /**
      * DELETE /api/admin/orders/{id}
-     * Eliminar pedido (soft: solo si no tiene items críticos).
-     * Para mantener el historial, normalmente se usa cancel, no delete.
+     * Eliminar pedido (reponiendo stock si no estaba cancelado).
      */
     public function destroy(int $id): JsonResponse
     {
-        $order = Order::findOrFail($id);
-        $order->delete();
+        $order = Order::with('items.product')->findOrFail($id);
 
-        return response()->json(['message' => 'Pedido eliminado']);
+        return DB::transaction(function () use ($order) {
+            if ($order->status !== Order::STATUS_CANCELLED) {
+                $changedStockIds = [];
+                foreach ($order->items as $item) {
+                    $product = $item->product()->lockForUpdate()->first();
+                    if (! $product) {
+                        continue;
+                    }
+
+                    $wasOutOfStock = (int) $product->stock <= 0;
+                    $product->increment('stock', $item->qty);
+
+                    if ($wasOutOfStock && ! $product->active) {
+                        $product->updateQuietly(['active' => true]);
+                    }
+
+                    $changedStockIds[] = $product->id;
+                }
+                Product::flushCacheFor($changedStockIds);
+            }
+
+            $order->delete();
+
+            return response()->json(['message' => 'Pedido eliminado']);
+        });
     }
 
     /**
@@ -339,17 +396,19 @@ class OrderController extends Controller
             $whatsappUrl = $builder->whatsappUrl();
 
             // (Opcional) enviar email al cliente avisando que el pedido fue confirmado
-            try {
-                if ($order->user && $order->user->email) {
-                    Mail::to($order->user->email)->send(
-                        new OrderStatusChanged($order->fresh(), $oldStatus, $order->status)
-                    );
-                }
-            } catch (\Throwable $e) {
-                Log::warning('No se pudo enviar email de confirmación', [
-                    'order_id' => $order->id,
-                    'error'    => $e->getMessage(),
-                ]);
+            if ($order->user && $order->user->email) {
+                $userEmail = $order->user->email;
+                $mailable = new OrderStatusChanged($order->fresh(), $oldStatus, $order->status);
+                DB::afterCommit(function () use ($userEmail, $mailable, $order) {
+                    try {
+                        Mail::to($userEmail)->queue($mailable);
+                    } catch (\Throwable $e) {
+                        Log::warning('No se pudo enviar email de confirmación', [
+                            'order_id' => $order->id,
+                            'error'    => $e->getMessage(),
+                        ]);
+                    }
+                });
             }
 
             return response()->json([
@@ -368,28 +427,7 @@ class OrderController extends Controller
     public function exportCsv(Request $request)
     {
         $query = Order::with(['items.product', 'user']);
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
-        }
-        if ($request->filled('source')) {
-            $source = $request->string('source');
-            $dazProductIds    = Product::whereNotNull('external_id')->pluck('id');
-            $manualProductIds = Product::whereNull('external_id')->pluck('id');
-            if ($source === 'daz') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $dazProductIds))
-                      ->whereDoesntHave('items', fn ($q) => $q->whereIn('product_id', $manualProductIds));
-            } elseif ($source === 'manual') {
-                $query->whereHas('items', fn ($q) => $q->whereIn('product_id', $manualProductIds))
-                      ->whereDoesntHave('items', fn ($q) => $q->whereIn('product_id', $dazProductIds));
-            }
-        }
-        if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->date('date_from'));
-        }
-        if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->date('date_to'));
-        }
+        $this->applyFilters($query, $request);
 
         $orders = $query->orderByDesc('created_at')->limit(5000)->get();
 

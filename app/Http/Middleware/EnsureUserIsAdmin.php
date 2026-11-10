@@ -40,7 +40,7 @@ class EnsureUserIsAdmin
             ], 401);
         }
 
-        if (! method_exists($user, 'hasRole') || ! $user->hasRole(self::ADMIN_ROLES)) {
+        if (! method_exists($user, 'isAdmin') || ! $user->isAdmin()) {
             return response()->json([
                 'message' => 'Acceso denegado. Se requieren permisos de administrador.',
             ], 403);

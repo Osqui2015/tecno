@@ -18,7 +18,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            $table->decimal('markup_percent', 5, 2)->default(0)->after('cash_price');
+            $table->decimal('markup_percent', 5, 2)->nullable()->default(0)->after('cash_price');
         });
     }
 

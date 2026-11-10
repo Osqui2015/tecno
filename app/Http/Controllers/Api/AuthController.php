@@ -15,6 +15,7 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'name'     => 'required|string|max:255',
+            'lastname' => 'sometimes|nullable|string|max:255',
             'email'    => 'required|email|unique:users,email',
             'phone'    => ['required', 'string', 'min:8', 'max:30', 'regex:'.self::phoneArRule()],
             'password' => 'required|string|min:8|confirmed',
@@ -33,10 +34,10 @@ class AuthController extends Controller
 
         $user = User::create([
             'name'     => $data['name'],
+            'lastname' => $data['lastname'] ?? null,
             'email'    => $data['email'],
             'phone'    => self::normalizePhoneAr($data['phone']),
             'password' => Hash::make($data['password']),
-            'role'     => User::ROLE_COMPRADOR,
         ]);
         $user->assignRole(User::ROLE_COMPRADOR);
         $user->load('roles');

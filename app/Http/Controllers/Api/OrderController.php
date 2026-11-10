@@ -7,6 +7,7 @@ use App\Mail\OrderStatusChanged;
 use App\Models\CartItem;
 use App\Models\Coupon;
 use App\Models\Order;
+use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -79,7 +80,6 @@ class OrderController extends Controller
         // Validar que los datos críticos estén completos
         $missing = array_filter([
             'nombre'     => $ship['name'],
-            'apellido'   => $ship['lastname'],
             'teléfono'   => $ship['phone'],
             'dirección'  => $ship['address'],
             'ciudad'     => $ship['city'],
@@ -97,8 +97,7 @@ class OrderController extends Controller
         return DB::transaction(function () use ($user, $ship, $data) {
             // 1) Traer items del carrito del user
             // Filtramos los items con qty=0 (marcados para quitar pero no confirmados)
-            $cartItems = CartItem::with('product')
-                ->where('user_id', $user->id)
+            $cartItems = CartItem::where('user_id', $user->id)
                 ->where('qty', '>', 0)
                 ->lockForUpdate()
                 ->get();
@@ -109,11 +108,18 @@ class OrderController extends Controller
                 ]);
             }
 
+            // Bloquear productos concurrentes para evitar sobreventa
+            $productIds = $cartItems->pluck('product_id')->unique()->all();
+            $products = Product::whereIn('id', $productIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
             $subtotal    = 0;
             $orderItems  = [];
 
             foreach ($cartItems as $ci) {
-                $product = $ci->product;
+                $product = $products->get($ci->product_id);
 
                 if (! $product || ! $product->active) {
                     throw ValidationException::withMessages([
@@ -127,17 +133,27 @@ class OrderController extends Controller
                     ]);
                 }
 
-                $lineTotal = (float) $product->price * $ci->qty;
+                $itemPrice = (float) ($product->final_price ?? $product->price);
+                $lineTotal = $itemPrice * $ci->qty;
                 $subtotal += $lineTotal;
 
                 $orderItems[] = [
                     'product_id' => $product->id,
                     'qty'        => $ci->qty,
-                    'price'      => $product->price,
+                    'price'      => $itemPrice,
                 ];
 
                 $product->decrement('stock', $ci->qty);
+
+                // Si el stock cayó a 0 o menos, forzar active = false
+                if ($product->fresh()->stock <= 0) {
+                    $product->updateQuietly(['active' => false]);
+                }
             }
+
+            // `decrement()`/`updateQuietly()` no disparan eventos del modelo:
+            // invalidamos el cache manualmente para no seguir mostrando stock viejo.
+            Product::flushCacheFor(array_column($orderItems, 'product_id'));
 
             // 1.5) Validar compra mínima
             $minPurchase = (float) config('store.min_purchase');
@@ -156,7 +172,10 @@ class OrderController extends Controller
             $coupon = null;
             $discount = 0;
             if (! empty($data['coupon_code'])) {
-                $coupon = Coupon::where('code', $data['coupon_code'])->first();
+                $couponCode = strtoupper(trim($data['coupon_code']));
+                $coupon = Coupon::where('code', $couponCode)
+                    ->lockForUpdate()
+                    ->first();
                 if (! $coupon) {
                     throw ValidationException::withMessages([
                         'coupon_code' => ['Cupón no encontrado.'],
@@ -229,19 +248,45 @@ class OrderController extends Controller
 
         return DB::transaction(function () use ($order) {
             // Devolver stock
+            $restoredProductIds = [];
             foreach ($order->items as $item) {
-                $item->product()->increment('stock', $item->qty);
+                $product = $item->product()->lockForUpdate()->first();
+                if (! $product) {
+                    continue;
+                }
+
+                $wasOutOfStock = (int) $product->stock <= 0;
+                $product->increment('stock', $item->qty);
+
+                // Si se había desactivado por quedarse sin stock, reactivarlo.
+                if ($wasOutOfStock && ! $product->active) {
+                    $product->updateQuietly(['active' => true]);
+                }
+
+                $restoredProductIds[] = $product->id;
             }
+
+            Product::flushCacheFor($restoredProductIds);
 
             $oldStatus = $order->status;
             $order->status = Order::STATUS_CANCELLED;
             $order->save();
 
-            // Email al comprador
+            // Email al comprador (después del commit y encolado)
             if ($order->user && $order->user->email) {
-                Mail::to($order->user->email)->send(
-                    new OrderStatusChanged($order->fresh()->load(['items.product', 'user']), $oldStatus, Order::STATUS_CANCELLED)
+                $userEmail = $order->user->email;
+                $mailable = new OrderStatusChanged(
+                    $order->fresh()->load(['items.product', 'user']),
+                    $oldStatus,
+                    Order::STATUS_CANCELLED
                 );
+                DB::afterCommit(function () use ($userEmail, $mailable) {
+                    try {
+                        Mail::to($userEmail)->queue($mailable);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('No se pudo encolar mail de cancelación: ' . $e->getMessage());
+                    }
+                });
             }
 
             return response()->json([

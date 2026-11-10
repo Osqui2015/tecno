@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Hash;
 use PragmaRX\Google2FA\Google2FA;
 
 class TwoFactorController extends Controller
@@ -95,11 +96,39 @@ class TwoFactorController extends Controller
 
     /**
      * DELETE /api/me/two-factor
-     * Desactiva 2FA.
+     * Desactiva 2FA requiriendo contraseña actual y código TOTP (o código de recuperación).
      */
     public function disable(Request $request): JsonResponse
     {
+        $data = $request->validate([
+            'password' => 'required|string',
+            'code'     => 'required|string',
+        ]);
+
         $user = $request->user();
+
+        if (! Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'Contraseña incorrecta'], 422);
+        }
+
+        if (! $user->two_factor_secret) {
+            return response()->json(['message' => '2FA no está activado'], 400);
+        }
+
+        $secret = Crypt::decryptString($user->two_factor_secret);
+        $google2fa = new Google2FA();
+        $validTotp = $google2fa->verifyKey($secret, $data['code']);
+
+        $validRecovery = false;
+        if (! $validTotp && ! empty($user->two_factor_recovery_codes)) {
+            $recoveryCodes = json_decode(Crypt::decryptString($user->two_factor_recovery_codes), true) ?: [];
+            $validRecovery = in_array(strtoupper($data['code']), array_map('strtoupper', $recoveryCodes), true);
+        }
+
+        if (! $validTotp && ! $validRecovery) {
+            return response()->json(['message' => 'Código 2FA inválido'], 422);
+        }
+
         $user->two_factor_secret = null;
         $user->two_factor_recovery_codes = null;
         $user->two_factor_confirmed_at = null;

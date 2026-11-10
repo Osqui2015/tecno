@@ -16,13 +16,19 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     /** Roles disponibles en el sistema. */
-    public const ROLE_COMPRADOR = 'comprador';
-    public const ROLE_ADMIN     = 'admin';
+    public const ROLE_SUPER_ADMIN     = 'super-admin';
+    public const ROLE_ADMIN           = 'admin';
+    public const ROLE_ADMIN_PEDIDOS   = 'admin-pedidos';
+    public const ROLE_ADMIN_PRODUCTOS = 'admin-productos';
+    public const ROLE_COMPRADOR       = 'comprador';
 
     /** Roles válidos (útil para validación). */
     public const ROLES = [
-        self::ROLE_COMPRADOR,
+        self::ROLE_SUPER_ADMIN,
         self::ROLE_ADMIN,
+        self::ROLE_ADMIN_PEDIDOS,
+        self::ROLE_ADMIN_PRODUCTOS,
+        self::ROLE_COMPRADOR,
     ];
 
     /**
@@ -97,12 +103,27 @@ class User extends Authenticatable
             default          => 0,
         })->first();
 
-        return $role?->name ?? 'guest';
+        if ($role) {
+            return $role->name;
+        }
+
+        // Fallback a columna users.role para admins legados sin rol Spatie sincronizado
+        $rawRole = $this->getRawOriginal('role');
+        if ($rawRole) {
+            return $rawRole;
+        }
+
+        return 'guest';
     }
 
     public function isAdmin(): bool
     {
-        return $this->hasRole(['super-admin', 'admin', 'admin-pedidos', 'admin-productos']);
+        if ($this->hasRole(['super-admin', 'admin', 'admin-pedidos', 'admin-productos'])) {
+            return true;
+        }
+
+        $rawRole = $this->getRawOriginal('role');
+        return in_array($rawRole, ['super-admin', 'admin', 'admin-pedidos', 'admin-productos'], true);
     }
 
     public function isComprador(): bool
@@ -145,7 +166,6 @@ class User extends Authenticatable
     public function hasCompleteProfile(): bool
     {
         return filled($this->name)
-            && filled($this->lastname)
             && filled($this->phone)
             && filled($this->address)
             && filled($this->city);

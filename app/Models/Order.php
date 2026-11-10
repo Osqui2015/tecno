@@ -79,6 +79,7 @@ class Order extends Model
         'origin_label',
         'items_count_daz',
         'items_count_tuc',
+        'items_count_tero',
         'items_count_manual',
         'customer_full_name',
     ];
@@ -125,6 +126,12 @@ class Order extends Model
      */
     public function getItemsCountDazAttribute(): int
     {
+        if (array_key_exists('items_count_daz', $this->attributes)) {
+            return (int) $this->attributes['items_count_daz'];
+        }
+        if (! $this->relationLoaded('items')) {
+            return 0;
+        }
         return $this->items->filter(fn ($i) => $i->product?->origin === 'daz')->count();
     }
 
@@ -133,6 +140,12 @@ class Order extends Model
      */
     public function getItemsCountTucAttribute(): int
     {
+        if (array_key_exists('items_count_tuc', $this->attributes)) {
+            return (int) $this->attributes['items_count_tuc'];
+        }
+        if (! $this->relationLoaded('items')) {
+            return 0;
+        }
         return $this->items->filter(fn ($i) => $i->product?->origin === 'tuc')->count();
     }
 
@@ -141,6 +154,12 @@ class Order extends Model
      */
     public function getItemsCountTeroAttribute(): int
     {
+        if (array_key_exists('items_count_tero', $this->attributes)) {
+            return (int) $this->attributes['items_count_tero'];
+        }
+        if (! $this->relationLoaded('items')) {
+            return 0;
+        }
         return $this->items->filter(fn ($i) => $i->product?->origin === 'tero')->count();
     }
 
@@ -149,6 +168,12 @@ class Order extends Model
      */
     public function getItemsCountManualAttribute(): int
     {
+        if (array_key_exists('items_count_manual', $this->attributes)) {
+            return (int) $this->attributes['items_count_manual'];
+        }
+        if (! $this->relationLoaded('items')) {
+            return 0;
+        }
         return $this->items->filter(fn ($i) => empty($i->product?->origin) || $i->product?->origin === 'manual')->count();
     }
 
@@ -157,6 +182,13 @@ class Order extends Model
      */
     public function getOriginLabelAttribute(): string
     {
+        if (array_key_exists('origin_label', $this->attributes)) {
+            return (string) $this->attributes['origin_label'];
+        }
+        if (! $this->relationLoaded('items')) {
+            return 'empty';
+        }
+
         $daz    = $this->items_count_daz;
         $tuc    = $this->items_count_tuc;
         $tero   = $this->items_count_tero;

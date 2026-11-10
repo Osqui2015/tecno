@@ -604,4 +604,12 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
         }
         return null;
     }
+
+    /**
+     * Helper / alias para compatibilidad y tests.
+     */
+    protected function extractPriceAmount(string $raw): ?float
+    {
+        return $this->parsePriceAmount($raw);
+    }
 }

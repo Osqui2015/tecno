@@ -257,10 +257,10 @@ class AdminStatsController extends Controller
         // Resumen global
         $global = (clone $base)->selectRaw('
             COUNT(*) as product_count,
-            AVG(markup_percent) as avg_markup,
-            MIN(markup_percent) as min_markup,
-            MAX(markup_percent) as max_markup,
-            SUM(price * (1 + markup_percent / 100)) as total_final_price,
+            AVG(COALESCE(markup_percent, 0)) as avg_markup,
+            MIN(COALESCE(markup_percent, 0)) as min_markup,
+            MAX(COALESCE(markup_percent, 0)) as max_markup,
+            SUM(price * (1 + COALESCE(markup_percent, 0) / 100.0)) as total_final_price,
             SUM(price) as total_base_price
         ')->first();
 
@@ -282,8 +282,8 @@ class AdminStatsController extends Controller
                         categories.id as group_id,
                         categories.name as group_name,
                         COUNT(*) as product_count,
-                        AVG(products.markup_percent) as avg_markup,
-                        SUM(products.price * (1 + products.markup_percent / 100)) as total_final_price,
+                        AVG(COALESCE(products.markup_percent, 0)) as avg_markup,
+                        SUM(products.price * (1 + COALESCE(products.markup_percent, 0) / 100.0)) as total_final_price,
                         SUM(products.price) as total_base_price
                     ')
                     ->groupBy('categories.id', 'categories.name')
@@ -300,8 +300,8 @@ class AdminStatsController extends Controller
                         brand as group_id,
                         brand as group_name,
                         COUNT(*) as product_count,
-                        AVG(markup_percent) as avg_markup,
-                        SUM(price * (1 + markup_percent / 100)) as total_final_price,
+                        AVG(COALESCE(markup_percent, 0)) as avg_markup,
+                        SUM(price * (1 + COALESCE(markup_percent, 0) / 100.0)) as total_final_price,
                         SUM(price) as total_base_price
                     ')
                     ->groupBy('brand')
@@ -316,8 +316,8 @@ class AdminStatsController extends Controller
                         COALESCE(origin, "manual") as group_id,
                         COALESCE(origin, "manual") as group_name,
                         COUNT(*) as product_count,
-                        AVG(markup_percent) as avg_markup,
-                        SUM(price * (1 + markup_percent / 100)) as total_final_price,
+                        AVG(COALESCE(markup_percent, 0)) as avg_markup,
+                        SUM(price * (1 + COALESCE(markup_percent, 0) / 100.0)) as total_final_price,
                         SUM(price) as total_base_price
                     ')
                     ->groupBy('origin')

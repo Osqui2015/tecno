@@ -38,11 +38,8 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withMiddleware(function (Middleware $middleware): void {
-        // Sanctum para SPA: estado para rutas web que consuman la API
-        $middleware->statefulApi();
-
-        // CSRF: las rutas API usan Bearer tokens (Sanctum createToken),
-        // no sesiones, así que NO necesitan CSRF. Lo excluimos para api/*.
+        // La API utiliza autenticación stateless mediante Bearer tokens (Sanctum createToken),
+        // por lo que no se utiliza statefulApi() con cookies de sesión y se exime api/* de CSRF.
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);

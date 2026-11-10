@@ -29,12 +29,12 @@ class ProfileController extends Controller
     {
         $data = $request->validate([
             'name'            => 'sometimes|required|string|max:255',
-            'lastname'        => 'sometimes|required|string|max:255',
-            'phone'           => 'sometimes|required|string|max:30',
-            'address'         => 'sometimes|required|string|max:255',
-            'city'            => 'sometimes|required|string|max:255',
-            'zip_code'        => 'sometimes|required|string|max:20',
-            'country'         => 'sometimes|required|string|max:255',
+            'lastname'        => 'sometimes|nullable|string|max:255',
+            'phone'           => 'sometimes|nullable|string|max:30',
+            'address'         => 'sometimes|nullable|string|max:255',
+            'city'            => 'sometimes|nullable|string|max:255',
+            'zip_code'        => 'sometimes|nullable|string|max:20',
+            'country'         => 'sometimes|nullable|string|max:255',
             'document_number' => 'sometimes|nullable|string|max:30',
         ]);
 

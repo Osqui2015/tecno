@@ -132,6 +132,8 @@ class ScrapeProductsJob implements ShouldQueue
             'detail_stock'      => $detailStats['stock_updated'],
             'detail_errors'     => $detailStats['errors'],
         ]);
+
+        \App\Support\CacheHelper::flush(['products:public']);
     }
 
     /**

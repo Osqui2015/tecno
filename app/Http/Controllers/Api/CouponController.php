@@ -22,7 +22,8 @@ class CouponController extends Controller
             'subtotal' => 'required|numeric|min:0',
         ]);
 
-        $coupon = Coupon::where('code', $data['code'])->first();
+        $code = strtoupper(trim($data['code']));
+        $coupon = Coupon::where('code', $code)->first();
 
         if (! $coupon) {
             throw ValidationException::withMessages([

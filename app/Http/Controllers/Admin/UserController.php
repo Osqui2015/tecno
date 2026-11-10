@@ -30,10 +30,13 @@ class UserController extends Controller
             });
         }
 
-        // Filtro por role: ahora filtra por relación Spatie.
+        // Filtro por role: relación Spatie con fallback a la columna legacy.
         if ($request->filled('role')) {
             $role = $request->string('role')->toString();
-            $query->whereHas('roles', fn ($q) => $q->where('name', $role));
+            $query->where(function ($q) use ($role) {
+                $q->whereHas('roles', fn ($r) => $r->where('name', $role))
+                    ->orWhere('role', $role);
+            });
         }
 
         $perPage = min($request->integer('per_page', 15), 100);
