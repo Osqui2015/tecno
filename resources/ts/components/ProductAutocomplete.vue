@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
 <template>
     <div ref="containerRef" class="relative flex-1 min-w-[220px]">
         <!-- Search icon -->
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-450 pointer-events-none z-10">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
             <SvgIcon name="search" size="1rem" />
         </span>
 

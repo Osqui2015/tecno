@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const cart = useCartStore();
 const auth = useAuthStore();
@@ -33,11 +34,7 @@ function checkout() {
     router.push({ name: 'checkout' });
 }
 
-const formatPrice = (n: number | string) => {
-    const value = Number(n);
-    if (!Number.isFinite(value)) return '$0';
-    return '$' + Math.round(value).toLocaleString('es-AR');
-};
+const formatPrice = formatCurrency;
 
 async function changeQty(itemId: number, currentQty: number, delta: number) {
     // Si llega a 0 y el usuario toca − otra vez, mostramos "Quitar" (no borramos).
@@ -106,7 +103,7 @@ async function confirmRemove(itemId: number) {
             <div class="w-16 h-16 mx-auto rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                 <SvgIcon name="cart" size="1.75rem" />
             </div>
-            <p class="text-slate-650 font-bold text-sm">Iniciá sesión para ver tu carrito.</p>
+            <p class="text-slate-600 font-bold text-sm">Iniciá sesión para ver tu carrito.</p>
             <router-link :to="{ name: 'login' }" class="btn btn-primary">Ingresar</router-link>
         </div>
 
@@ -137,26 +134,30 @@ async function confirmRemove(itemId: number) {
                     <div class="flex items-center gap-4">
                         <router-link
                             :to="{ name: 'product-detail', params: { id: item.product_id } }"
-                            class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100/60"
+                            class="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100/60 dark:border-slate-700/60"
                         >
                             <img
                                 v-if="item.product.image && !imageErrors[item.id]"
                                 :src="item.product.image"
                                 :alt="item.product.name"
+                                width="96"
+                                height="96"
+                                loading="lazy"
+                                decoding="async"
                                 class="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                                 referrerpolicy="no-referrer"
                                 @error="imageErrors[item.id] = true"
                             />
                             <div
                                 v-else
-                                class="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400"
+                                class="w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400"
                             >
                                 <SvgIcon name="box" size="1.25rem" class="opacity-80" />
                             </div>
                         </router-link>
 
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-800 text-sm line-clamp-2 leading-snug">
+                            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-sm line-clamp-2 leading-snug">
                                 {{ item.product.name }}
                             </h3>
                             <p class="text-xs text-slate-400 font-semibold mt-1">
@@ -173,12 +174,12 @@ async function confirmRemove(itemId: number) {
                         <!-- Qty controls desktop (oculto si qty=0) -->
                         <div
                             v-if="item.qty > 0"
-                            class="hidden sm:flex items-center bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden"
+                            class="hidden sm:flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700 rounded-xl overflow-hidden"
                         >
                             <button
                                 @click="changeQty(item.id, item.qty, -1)"
                                 :disabled="cart.loading"
-                                class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer disabled:opacity-40"
+                                class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40"
                                 aria-label="Disminuir cantidad"
                             >
                                 <SvgIcon name="minus" size="0.65rem" />
@@ -192,13 +193,13 @@ async function confirmRemove(itemId: number) {
                                 @blur="commitQty(item.id, item.qty)"
                                 @keydown.enter="($event.target as HTMLInputElement).blur()"
                                 :disabled="cart.loading"
-                                class="w-10 h-9 text-center font-bold text-sm text-slate-800 bg-transparent outline-none border-x border-slate-200/50 focus:bg-white focus:ring-2 focus:ring-brand-300"
+                                class="w-10 h-9 text-center font-bold text-sm text-slate-800 dark:text-slate-100 bg-transparent outline-none border-x border-slate-200/50 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-brand-300"
                                 aria-label="Cantidad"
                             />
                             <button
                                 @click="changeQty(item.id, item.qty, 1)"
                                 :disabled="cart.loading"
-                                class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 font-bold transition-colors cursor-pointer disabled:opacity-40"
+                                class="w-9 h-9 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 font-bold transition-colors cursor-pointer disabled:opacity-40"
                                 aria-label="Aumentar cantidad"
                             >
                                 <SvgIcon name="plus" size="0.65rem" />
@@ -213,7 +214,7 @@ async function confirmRemove(itemId: number) {
                             class="inline-flex items-center gap-1.5 px-3 h-9 text-[11px] font-bold uppercase tracking-wider rounded-xl border transition-all cursor-pointer disabled:opacity-50"
                             :class="confirmRemoveId === item.id
                                 ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700'
-                                : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'"
+                                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border-rose-200 dark:border-rose-900/60 hover:bg-rose-100 dark:hover:bg-rose-900/40'"
                         >
                             <SvgIcon name="trash" size="0.75rem" />
                             <span>{{ confirmRemoveId === item.id ? 'Confirmar' : 'Quitar' }}</span>
@@ -223,7 +224,7 @@ async function confirmRemove(itemId: number) {
                         <div class="text-right flex-shrink-0 pl-2">
                             <p
                                 class="font-black text-base"
-                                :class="item.qty === 0 ? 'text-slate-400 line-through' : 'text-slate-800'"
+                                :class="item.qty === 0 ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100'"
                             >
                                 {{ formatPrice(Number(item.subtotal || (Number(item.product?.final_price ?? item.product?.price ?? 0) * item.qty))) }}
                             </p>
@@ -243,20 +244,20 @@ async function confirmRemove(itemId: number) {
 
                     <!-- Mobile: controles siempre accesibles -->
                     <div class="flex sm:hidden w-full mt-3 items-center justify-between gap-2">
-                        <div class="flex items-center bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden">
+                        <div class="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200/50 dark:border-slate-700 rounded-xl overflow-hidden">
                             <button
                                 @click="changeQty(item.id, item.qty, -1)"
-                                class="w-8 h-8 flex items-center justify-center"
+                                class="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700"
                                 aria-label="Disminuir cantidad"
                             >
                                 <SvgIcon name="minus" size="0.6rem" />
                             </button>
-                            <span class="w-8 text-center font-bold text-sm">
+                            <span class="w-8 text-center font-bold text-sm text-slate-800 dark:text-slate-100">
                                 {{ item.qty }}
                             </span>
                             <button
                                 @click="changeQty(item.id, item.qty, 1)"
-                                class="w-8 h-8 flex items-center justify-center"
+                                class="w-8 h-8 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700"
                                 aria-label="Aumentar cantidad"
                             >
                                 <SvgIcon name="plus" size="0.6rem" />
@@ -267,7 +268,7 @@ async function confirmRemove(itemId: number) {
                             class="text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
                             :class="confirmRemoveId === item.id
                                 ? 'bg-rose-600 text-white'
-                                : 'text-rose-600 bg-rose-50 hover:bg-rose-100'"
+                                : 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40'"
                         >
                             {{ confirmRemoveId === item.id ? 'Confirmar' : 'Quitar' }}
                         </button>
@@ -282,18 +283,18 @@ async function confirmRemove(itemId: number) {
                 <!-- Mínimo de compra (barra de progreso) -->
                 <div class="card p-6">
                     <div class="flex items-center justify-between mb-2.5">
-                        <span class="text-xs font-bold text-slate-700">
+                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
                             Compra mínima: {{ formatPrice(cart.minPurchase) }}
                         </span>
                         <span
                             class="text-xs font-bold"
-                            :class="cart.meetsMinimum ? 'text-emerald-600' : 'text-rose-500'"
+                            :class="cart.meetsMinimum ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'"
                         >
                             {{ Math.round(cart.progress) }}%
                         </span>
                     </div>
 
-                    <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div class="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
                             class="h-full rounded-full transition-all duration-500 ease-out"
                             :class="cart.meetsMinimum
@@ -305,30 +306,30 @@ async function confirmRemove(itemId: number) {
 
                     <p
                         v-if="!cart.meetsMinimum"
-                        class="text-[11px] text-rose-500 font-bold mt-2 leading-snug"
+                        class="text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-2 leading-snug"
                     >
                         Te faltan {{ formatPrice(cart.remaining) }} para alcanzar el mínimo.
                     </p>
                     <p
                         v-else
-                        class="text-[11px] text-emerald-600 font-bold mt-2 leading-snug"
+                        class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-2 leading-snug"
                     >
                         ¡Mínimo alcanzado! Podés finalizar tu compra.
                     </p>
                 </div>
 
                 <div class="card p-6">
-                    <h2 class="font-bold text-slate-800 text-base mb-4 tracking-tight">Resumen del pedido</h2>
-                    <div class="space-y-3.5 text-xs font-semibold text-slate-500">
+                    <h2 class="font-bold text-slate-800 dark:text-slate-100 text-base mb-4 tracking-tight">Resumen del pedido</h2>
+                    <div class="space-y-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                         <div class="flex justify-between">
                             <span>Subtotal ({{ cart.itemsCount }} items)</span>
-                            <span class="text-slate-850 font-bold">{{ formatPrice(cart.total) }}</span>
+                            <span class="text-slate-900 dark:text-slate-100 font-bold">{{ formatPrice(cart.total) }}</span>
                         </div>
                     </div>
-                    <hr class="my-4 border-slate-100" />
+                    <hr class="my-4 border-slate-100 dark:border-slate-800" />
                     <div class="flex justify-between items-baseline mb-6">
-                        <span class="font-bold text-slate-800 text-sm">Total</span>
-                        <span class="text-2xl font-black text-slate-800">
+                        <span class="font-bold text-slate-800 dark:text-slate-100 text-sm">Total</span>
+                        <span class="text-2xl font-black text-slate-800 dark:text-slate-100">
                             {{ formatPrice(cart.total) }}
                         </span>
                     </div>

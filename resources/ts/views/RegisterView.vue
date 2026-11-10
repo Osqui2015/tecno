@@ -7,6 +7,7 @@ const auth = useAuthStore();
 const router = useRouter();
 
 const name = ref('');
+const lastname = ref('');
 const email = ref('');
 const phone = ref('');
 const password = ref('');
@@ -33,15 +34,15 @@ const phoneValid = computed(() => {
 
 async function handleSubmit() {
     if (!passwordsMatch.value) {
-        alert('Las contraseñas no coinciden');
+        auth.error = 'Las contraseñas no coinciden.';
         return;
     }
     if (!acceptTerms.value) {
-        alert('Aceptá los términos para continuar');
+        auth.error = 'Por favor, aceptá los términos de servicio para continuar.';
         return;
     }
     if (!phoneValid.value) {
-        alert('Ingresá un número de celular válido (mínimo 10 dígitos)');
+        auth.error = 'Ingresá un número de celular válido (mínimo 10 dígitos).';
         return;
     }
     const ok = await auth.register(
@@ -49,7 +50,8 @@ async function handleSubmit() {
         email.value,
         phone.value,
         password.value,
-        passwordConfirmation.value
+        passwordConfirmation.value,
+        lastname.value.trim() || undefined
     );
     if (ok) {
         router.push('/');
@@ -71,9 +73,9 @@ async function handleSubmit() {
             <div class="relative">
                 <router-link :to="{ name: 'home' }" class="inline-flex items-center gap-2">
                     <span class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-xl">
-                        🛒
+                        ⚡
                     </span>
-                    <span class="text-2xl font-extrabold">Ecomers</span>
+                    <span class="text-2xl font-extrabold tracking-tight">Tecno-Rexs</span>
                 </router-link>
             </div>
 
@@ -88,21 +90,21 @@ async function handleSubmit() {
                     Creá tu cuenta en segundos y desbloqueá beneficios exclusivos, descuentos y seguimiento de pedidos.
                 </p>
                 <ul class="space-y-2 pt-4 text-white/90 text-sm">
-                    <li class="flex items-center gap-2">✅ 10% OFF en tu primera compra</li>
+                    <li class="flex items-center gap-2">✅ Descuentos en tus compras</li>
                     <li class="flex items-center gap-2">✅ Acceso a ofertas exclusivas</li>
                     <li class="flex items-center gap-2">✅ Seguimiento de pedidos en tiempo real</li>
                 </ul>
             </div>
 
             <div class="relative text-xs text-white/50">
-                © {{ new Date().getFullYear() }} Ecomers
+                © {{ new Date().getFullYear() }} Tecno-Rexs
             </div>
         </div>
 
         <!-- Form -->
-        <div class="bg-white p-8 sm:p-12 flex flex-col justify-center">
+        <div class="bg-white dark:bg-slate-900 p-8 sm:p-12 flex flex-col justify-center">
             <div class="max-w-md mx-auto w-full">
-                <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
+                <h1 class="text-3xl font-extrabold text-gray-900 dark:text-slate-100 mb-2">
                     Crear cuenta
                 </h1>
                 <p class="text-gray-500 mb-8">
@@ -116,16 +118,27 @@ async function handleSubmit() {
                 </p>
 
                 <form @submit.prevent="handleSubmit" class="space-y-5">
-                    <div>
-                        <label class="label">Nombre</label>
-                        <input
-                            v-model="name"
-                            type="text"
-                            required
-                            autofocus
-                            class="input"
-                            placeholder="Juan Pérez"
-                        />
+                    <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="label">Nombre</label>
+                            <input
+                                v-model="name"
+                                type="text"
+                                required
+                                autofocus
+                                class="input"
+                                placeholder="Juan"
+                            />
+                        </div>
+                        <div>
+                            <label class="label">Apellido (opcional)</label>
+                            <input
+                                v-model="lastname"
+                                type="text"
+                                class="input"
+                                placeholder="Pérez"
+                            />
+                        </div>
                     </div>
                     <div>
                         <label class="label">Email</label>
@@ -184,6 +197,7 @@ async function handleSubmit() {
                                 type="button"
                                 @click="showPassword = !showPassword"
                                 class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                                :aria-label="showPassword ? 'Ocultar contraseña' : 'Ver contraseña'"
                             >
                                 {{ showPassword ? '🙈' : '👁️' }}
                             </button>
@@ -242,10 +256,7 @@ async function handleSubmit() {
                             class="mt-1 w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                         />
                         <span class="text-sm text-gray-600">
-                            Acepto los
-                            <a href="#" class="text-brand-600 hover:underline font-medium">Términos</a>
-                            y la
-                            <a href="#" class="text-brand-600 hover:underline font-medium">Política de privacidad</a>.
+                            Acepto los Términos de servicio y la Política de privacidad.
                         </span>
                     </label>
 

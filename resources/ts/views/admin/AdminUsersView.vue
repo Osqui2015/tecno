@@ -3,6 +3,8 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import axios from '@/bootstrap';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import BaseModal from '@/components/BaseModal.vue';
+import { formatDate } from '@/utils/formatters';
 import { useAuthStore } from '@/stores/auth';
 
 interface UserItem {
@@ -152,29 +154,56 @@ async function saveUser() {
     }
 }
 
-async function deleteUser(user: UserItem) {
-    if (user.id === auth.user?.id) {
-        alert('No puedes eliminar tu propio perfil de usuario.');
-        return;
-    }
+const userToDelete = ref<UserItem | null>(null);
+const feedback = ref<{ message: string; type: 'success' | 'error' } | null>(null);
 
-    if (!confirm(`¿Seguro que deseas eliminar el perfil de "${user.name} ${user.lastname || ''}" (${user.email})?`)) return;
-
-    try {
-        await axios.delete(`/admin/users/${user.id}`);
-        loadUsers();
-    } catch (err: any) {
-        alert(err.response?.data?.message || 'Error al eliminar usuario');
-    }
+function notify(message: string, type: 'success' | 'error' = 'success') {
+    feedback.value = { message, type };
+    setTimeout(() => { feedback.value = null; }, 4000);
 }
 
-const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-AR');
-};
+function promptDelete(user: UserItem) {
+    if (user.id === auth.user?.id) {
+        notify('No podés eliminar tu propio perfil de usuario.', 'error');
+        return;
+    }
+    userToDelete.value = user;
+}
+
+async function executeDelete() {
+    if (!userToDelete.value) return;
+    try {
+        await axios.delete(`/admin/users/${userToDelete.value.id}`);
+        notify(`Usuario "${userToDelete.value.name}" eliminado.`);
+        userToDelete.value = null;
+        loadUsers();
+    } catch (err: any) {
+        notify(err.response?.data?.message || 'Error al eliminar usuario', 'error');
+    }
+}
 </script>
 
 <template>
     <div class="space-y-5">
+        <!-- Feedback alert -->
+        <transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0 -translate-y-2"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-2"
+        >
+            <div
+                v-if="feedback"
+                :class="feedback.type === 'error' ? 'bg-red-500/15 border-red-500 text-red-700 dark:text-red-400' : 'bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-400'"
+                class="p-4 rounded-xl border flex items-center justify-between text-sm"
+            >
+                <span>{{ feedback.message }}</span>
+                <button @click="feedback = null" class="text-xs font-semibold underline ml-3">Cerrar</button>
+            </div>
+        </transition>
+
         <!-- Header & Filtros -->
         <div class="card p-5 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -202,6 +231,9 @@ const formatDate = (dateStr: string) => {
                     <option value="">Todos los roles</option>
                     <option value="comprador">Compradores</option>
                     <option value="admin">Administradores</option>
+                    <option value="super-admin">Super admin</option>
+                    <option value="admin-pedidos">Admin pedidos</option>
+                    <option value="admin-productos">Admin productos</option>
                 </select>
             </div>
         </div>
@@ -269,7 +301,7 @@ const formatDate = (dateStr: string) => {
                                     Editar
                                 </button>
                                 <button
-                                    @click="deleteUser(u)"
+                                    @click="promptDelete(u)"
                                     :disabled="u.id === auth.user?.id"
                                     class="btn btn-danger text-xs px-2.5 py-1 disabled:opacity-40"
                                 >
@@ -310,7 +342,7 @@ const formatDate = (dateStr: string) => {
                     <h3 class="font-bold text-lg text-slate-800 dark:text-slate-100">
                         {{ editingUser ? 'Editar Perfil de Usuario' : 'Nuevo Perfil de Usuario' }}
                     </h3>
-                    <button @click="showModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <button @click="showModal = false" class="text-slate-400 hover:text-slate-600" aria-label="Cerrar modal">✕</button>
                 </div>
 
                 <form @submit.prevent="saveUser" class="space-y-4 text-sm">
@@ -363,6 +395,9 @@ const formatDate = (dateStr: string) => {
                             <select v-model="form.role" class="input">
                                 <option value="comprador">Comprador</option>
                                 <option value="admin">Administrador</option>
+                                <option value="super-admin">Super admin</option>
+                                <option value="admin-pedidos">Admin pedidos</option>
+                                <option value="admin-productos">Admin productos</option>
                             </select>
                         </div>
                     </div>
@@ -415,7 +450,7 @@ const formatDate = (dateStr: string) => {
                     <h3 class="font-bold text-lg text-slate-800 dark:text-slate-100">
                         Detalle del Usuario #{{ selectedUserDetail.id }}
                     </h3>
-                    <button @click="showDetailModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <button @click="showDetailModal = false" class="text-slate-400 hover:text-slate-600" aria-label="Cerrar detalle">✕</button>
                 </div>
 
                 <div class="space-y-3 text-sm">
@@ -459,5 +494,25 @@ const formatDate = (dateStr: string) => {
                 </div>
             </div>
         </div>
+
+        <!-- Modal Confirmar Eliminación accesible -->
+        <BaseModal
+            :show="userToDelete !== null"
+            title="Confirmar eliminación de usuario"
+            maxWidth="max-w-md"
+            @close="userToDelete = null"
+        >
+            <p class="text-sm text-slate-600 dark:text-slate-300">
+                ¿Seguro que deseás eliminar el perfil de <strong>"{{ userToDelete?.name }} {{ userToDelete?.lastname || '' }}"</strong> ({{ userToDelete?.email }})?
+            </p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" @click="userToDelete = null" class="btn btn-secondary text-xs">
+                    Cancelar
+                </button>
+                <button type="button" @click="executeDelete" class="btn btn-danger text-xs">
+                    Sí, eliminar
+                </button>
+            </div>
+        </BaseModal>
     </div>
 </template>

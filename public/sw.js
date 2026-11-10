@@ -11,7 +11,7 @@
  *   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
  */
 
-const CACHE_NAME = 'tecno-rexs-v1';
+const CACHE_NAME = 'tecno-rexs-v2';
 const PRECACHE_URLS = [
     '/',
     '/productos',
@@ -51,8 +51,10 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(request)
                 .then((res) => {
-                    const copy = res.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    if (res.ok && res.status === 200) {
+                        const copy = res.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    }
                     return res;
                 })
                 .catch(() => caches.match(request).then((r) => r || caches.match('/')))

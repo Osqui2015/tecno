@@ -30,6 +30,13 @@ function findCategoryByParam(rawParam: string | string[] | undefined) {
     );
 }
 
+let isInitialized = false;
+let prevFilters = {
+    min: minPrice.value,
+    max: maxPrice.value,
+    sort: sortBy.value
+};
+
 async function syncCategoryFromRoute() {
     if (store.categories.length === 0) {
         await store.fetchCategories();
@@ -37,6 +44,12 @@ async function syncCategoryFromRoute() {
     const cat = findCategoryByParam(route.params.slug);
     store.filterCategory = cat ? cat.id : null;
     await store.fetchProducts(1);
+    isInitialized = true;
+    prevFilters = {
+        min: store.minPrice,
+        max: store.maxPrice,
+        sort: store.sortBy
+    };
 }
 
 onMounted(async () => {
@@ -50,7 +63,16 @@ watch(
     }
 );
 
-watch([minPrice, maxPrice, sortBy], () => {
+watch([minPrice, maxPrice, sortBy], ([newMin, newMax, newSort]) => {
+    if (!isInitialized) return;
+    if (
+        newMin === prevFilters.min &&
+        newMax === prevFilters.max &&
+        newSort === prevFilters.sort
+    ) {
+        return;
+    }
+    prevFilters = { min: newMin, max: newMax, sort: newSort };
     store.fetchProducts(1);
 });
 
@@ -74,11 +96,12 @@ function handleCategoryChange(categoryId: number | null) {
 
     const cat = store.categories.find((c) => c.id === categoryId);
     if (cat) {
-        if (route.params.slug === cat.name) {
+        const targetSlug = cat.slug || cat.name;
+        if (route.params.slug === targetSlug || route.params.slug === cat.name) {
             store.filterCategory = cat.id;
             store.fetchProducts(1);
         } else {
-            router.push({ name: 'products-by-category', params: { slug: cat.name } });
+            router.push({ name: 'products-by-category', params: { slug: targetSlug } });
         }
     }
 }
@@ -87,7 +110,8 @@ function clearFilters() {
     store.minPrice = null;
     store.maxPrice = null;
     store.sortBy = 'name_asc';
-    store.setSearch('');
+    prevFilters = { min: null, max: null, sort: 'name_asc' };
+    store.searchQuery = '';
     if (route.params.slug) {
         router.push({ name: 'products' });
     } else {

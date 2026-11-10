@@ -1,40 +1,37 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useOrdersStore } from '@/stores/orders';
 import PageHeader from '@/components/PageHeader.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import SvgIcon from '@/components/SvgIcon.vue';
+import { formatCurrency, formatDateTime } from '@/utils/formatters';
 
 const ordersStore = useOrdersStore();
 const route = useRoute();
+const imageErrors = ref<Record<number, boolean>>({});
 
 onMounted(() => {
     ordersStore.fetchMyOrders();
 });
 
-const formatPrice = (n: number) =>
-    '$' + Math.round(n).toLocaleString('es-AR');
-
-const formatDate = (d: string) =>
-    new Date(d).toLocaleString('es-AR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+const formatPrice = formatCurrency;
+const formatDate = formatDateTime;
 
 function statusInfo(status: string) {
     const map: Record<string, { label: string; cls: string; icon: string }> = {
-        pending:   { label: 'Pendiente',  cls: 'chip-warning', icon: '⏳' },
-        processing:{ label: 'Procesando', cls: 'chip-info',    icon: '⚙️' },
-        shipped:   { label: 'En camino',  cls: 'chip-info',    icon: '🚚' },
-        delivered: { label: 'Entregado',  cls: 'chip-success', icon: '✅' },
-        completed: { label: 'Completado', cls: 'chip-success', icon: '✅' },
-        cancelled: { label: 'Cancelado',  cls: 'chip-danger',  icon: '❌' },
+        pending:   { label: 'Pendiente',  cls: 'chip-warning', icon: 'clock' },
+        confirmed: { label: 'Confirmado', cls: 'chip-info',    icon: 'check' },
+        preparing: { label: 'Preparando', cls: 'chip-info',    icon: 'box' },
+        shipped:   { label: 'En camino',  cls: 'chip-info',    icon: 'truck' },
+        delivered: { label: 'Entregado',  cls: 'chip-success', icon: 'check' },
+        cancelled: { label: 'Cancelado',  cls: 'chip-danger',  icon: 'close' },
+        // Fallbacks
+        processing:{ label: 'En proceso', cls: 'chip-info',    icon: 'refresh' },
+        completed: { label: 'Entregado',  cls: 'chip-success', icon: 'check' },
     };
-    return map[status] ?? { label: status, cls: 'chip-muted', icon: '📦' };
+    return map[status] ?? { label: status, cls: 'chip-muted', icon: 'box' };
 }
 </script>
 
@@ -84,37 +81,38 @@ function statusInfo(status: string) {
                 <div class="flex flex-wrap justify-between gap-3 items-start mb-4">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
-                            <h3 class="font-bold text-lg text-gray-900">
+                            <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100">
                                 Pedido #{{ order.id }}
                             </h3>
-                            <span :class="statusInfo(order.status).cls">
-                                {{ statusInfo(order.status).icon }}
-                                {{ statusInfo(order.status).label }}
+                            <span :class="statusInfo(order.status).cls" class="inline-flex items-center gap-1.5">
+                                <SvgIcon :name="statusInfo(order.status).icon" size="0.75rem" />
+                                <span>{{ statusInfo(order.status).label }}</span>
                             </span>
                         </div>
-                        <p class="text-sm text-gray-500 flex items-center gap-1">
-                            🗓️ {{ formatDate(order.created_at) }}
+                        <p class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <SvgIcon name="clock" size="0.8rem" />
+                            <span>{{ formatDate(order.created_at) }}</span>
                         </p>
                     </div>
                     <div class="text-right">
-                        <p class="text-xs text-gray-500">Total</p>
-                        <p class="text-2xl font-extrabold text-gray-900">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Total</p>
+                        <p class="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
                             {{ formatPrice(Number(order.total)) }}
                         </p>
                     </div>
                 </div>
 
-                <div class="bg-gray-50 rounded-xl p-4 mb-3">
-                    <p class="text-xs font-semibold text-gray-500 uppercase mb-1">
+                <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-4 mb-3">
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">
                         Dirección de envío
                     </p>
-                    <p class="text-sm text-gray-700 flex items-start gap-2">
+                    <p class="text-sm text-slate-700 dark:text-slate-300 flex items-start gap-2">
                         <span>📍</span>
                         <span>{{ order.shipping_address }}</span>
                     </p>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
+                <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <span class="chip chip-muted">
                         📦 {{ order.items?.length || 0 }} {{ (order.items?.length || 0) === 1 ? 'producto' : 'productos' }}
                     </span>
@@ -129,18 +127,41 @@ function statusInfo(status: string) {
                 <transition name="fade">
                     <ul
                         v-if="(order as any)._expanded && order.items?.length"
-                        class="mt-4 space-y-2 pt-4 border-t border-gray-100"
+                        class="mt-4 space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800"
                     >
                         <li
                             v-for="item in order.items"
-                            :key="item.product_id"
-                            class="flex items-center justify-between text-sm"
+                            :key="item.id || item.product_id"
+                            class="flex items-center justify-between text-sm py-2 border-b border-slate-50 dark:border-slate-800/50 last:border-0"
                         >
-                            <span class="text-gray-700">
-                                <span class="font-semibold">{{ item.qty }}×</span>
-                                Producto #{{ item.product_id }}
-                            </span>
-                            <span class="font-medium text-gray-900">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-12 h-12 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden flex-shrink-0">
+                                    <img
+                                        v-if="item.product?.image && !imageErrors[item.id]"
+                                        :src="item.product.image"
+                                        :alt="item.product?.name"
+                                        width="48"
+                                        height="48"
+                                        loading="lazy"
+                                        decoding="async"
+                                        class="w-full h-full object-cover"
+                                        referrerpolicy="no-referrer"
+                                        @error="imageErrors[item.id] = true"
+                                    />
+                                    <div v-else class="w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400">
+                                        <SvgIcon name="box" size="0.95rem" />
+                                    </div>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-slate-800 dark:text-slate-100 text-xs line-clamp-1">
+                                        {{ item.product?.name || `Producto #${item.product_id}` }}
+                                    </p>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">
+                                        {{ item.qty }} × {{ formatPrice(Number(item.price)) }}
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="font-bold text-slate-900 dark:text-slate-100 text-sm ml-4 whitespace-nowrap">
                                 {{ formatPrice(Number(item.price) * item.qty) }}
                             </span>
                         </li>

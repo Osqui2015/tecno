@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useWishlistStore } from '@/stores/wishlist';
 import { useRouter } from 'vue-router';
 import SvgIcon from '@/components/SvgIcon.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const props = defineProps<{
     product: Product;
@@ -42,8 +43,7 @@ const stockStatus = computed(() => {
     return { label: `${s} disponibles`, cls: 'chip-success' };
 });
 
-const formatPrice = (n: number) =>
-    '$' + Math.round(n).toLocaleString('es-AR');
+const formatPrice = (n: number) => formatCurrency(n);
 
 const imageError = ref(false);
 const added = ref(false);
@@ -76,16 +76,19 @@ async function addToCart() {
                 v-if="product.image && !imageError"
                 :src="product.image"
                 :alt="product.name"
-                class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-505"
+                class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                width="300"
+                height="300"
                 loading="lazy"
+                decoding="async"
                 referrerpolicy="no-referrer"
                 @error="imageError = true"
             />
             <div
                 v-else
-                class="w-full h-full flex flex-col items-center justify-center bg-slate-50 text-slate-400 gap-2 p-4 text-center"
+                class="w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 gap-2 p-4 text-center"
             >
-                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-350">
+                <div class="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400">
                     <span class="material-symbols-outlined text-lg">package_2</span>
                 </div>
                 <span class="text-[9px] uppercase font-bold tracking-wider text-slate-400">
@@ -128,7 +131,7 @@ async function addToCart() {
                 <div class="flex items-center gap-1.5 mb-1.5">
                     <router-link
                         v-if="product.category"
-                        :to="{ name: 'products-by-category', params: { slug: product.category.name } }"
+                        :to="{ name: 'products-by-category', params: { slug: product.category.slug || product.category.name } }"
                         class="text-[9px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 hover:bg-brand-100 px-2.5 py-0.5 rounded-full transition-colors"
                     >
                         {{ product.category.name }}

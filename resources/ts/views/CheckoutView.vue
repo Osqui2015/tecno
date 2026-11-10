@@ -8,6 +8,7 @@ import { useCouponStore } from '@/stores/coupon';
 import { useStoreInfo, buildWhatsappUrl } from '@/composables/useStoreInfo';
 import PageHeader from '@/components/PageHeader.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const router = useRouter();
 const cart = useCartStore();
@@ -17,6 +18,8 @@ const coupon = useCouponStore();
 const { whatsappNumber, name: storeName, load: loadStoreInfo } = useStoreInfo();
 const imageErrors = ref<Record<number, boolean>>({});
 
+const name = ref('');
+const lastname = ref('');
 const address = ref('');
 const city = ref('');
 const zip = ref('');
@@ -24,11 +27,18 @@ const phone = ref('');
 const notes = ref('');
 const submitting = ref(false);
 
-const formatPrice = (n: number | string) =>
-    '$' + Math.round(Number(n)).toLocaleString('es-AR');
+const formatPrice = formatCurrency;
 
 onMounted(async () => {
     if (!auth.user) await auth.fetchUser();
+    if (auth.user) {
+        name.value = auth.user.name ?? '';
+        lastname.value = (auth.user as any).lastname ?? '';
+        phone.value = auth.user.phone ?? '';
+        address.value = (auth.user as any).address ?? '';
+        city.value = (auth.user as any).city ?? '';
+        zip.value = (auth.user as any).zip_code ?? '';
+    }
     await cart.fetchCart();
     // Cargar el número de WhatsApp de la tienda (se cachea entre componentes).
     loadStoreInfo();
@@ -36,6 +46,7 @@ onMounted(async () => {
 
 const valid = computed(() => {
     return (
+        (name.value.trim().length >= 2 || Boolean(auth.user?.name)) &&
         address.value.trim().length >= 5 &&
         city.value.trim().length >= 2 &&
         zip.value.trim().length >= 3 &&
@@ -103,12 +114,14 @@ function openWhatsappForOrder(order: any) {
 async function placeOrder() {
     if (!valid.value) return;
     if (!cart.meetsMinimum) {
-        alert(`La compra mínima es de ${formatPrice(cart.minPurchase)}. Te faltan ${formatPrice(cart.remaining)}.`);
+        orders.error = `La compra mínima es de ${formatPrice(cart.minPurchase)}. Te faltan ${formatPrice(cart.remaining)}.`;
         return;
     }
     submitting.value = true;
     try {
         const overrides: any = {
+            customer_name: name.value.trim() || undefined,
+            customer_lastname: lastname.value.trim() || undefined,
             customer_address: address.value,
             customer_city: city.value,
             customer_zip: zip.value,
@@ -143,7 +156,7 @@ async function placeOrder() {
             <div class="w-16 h-16 mx-auto rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                 <SvgIcon name="cart" size="1.75rem" />
             </div>
-            <p class="text-slate-650 font-bold text-sm">
+            <p class="text-slate-600 font-bold text-sm">
                 No tenés productos cargados en tu carrito.
             </p>
             <router-link :to="{ name: 'products' }" class="btn btn-primary">
@@ -159,7 +172,7 @@ async function placeOrder() {
                         <span class="w-7 h-7 rounded-xl bg-amber-100/70 text-amber-700 flex items-center justify-center font-bold text-xs">
                             🎟️
                         </span>
-                        <h2 class="text-sm font-extrabold text-slate-805">Cupón de descuento</h2>
+                        <h2 class="text-sm font-extrabold text-slate-800">Cupón de descuento</h2>
                     </div>
                     <div v-if="!coupon.appliedCoupon" class="flex gap-2">
                         <input
@@ -202,9 +215,17 @@ async function placeOrder() {
                 <section class="card p-6">
                     <div class="flex items-center gap-2.5 mb-5">
                         <span class="w-7 h-7 rounded-xl bg-brand-100/70 text-brand-700 flex items-center justify-center font-bold text-xs">1</span>
-                        <h2 class="text-sm font-extrabold text-slate-805">Datos</h2>
+                        <h2 class="text-sm font-extrabold text-slate-800">Datos</h2>
                     </div>
                     <div class="grid sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="label">Nombre</label>
+                            <input v-model="name" class="input" placeholder="Juan" />
+                        </div>
+                        <div>
+                            <label class="label">Apellido (opcional)</label>
+                            <input v-model="lastname" class="input" placeholder="Pérez" />
+                        </div>
                         <div class="sm:col-span-2">
                             <label class="label">Dirección</label>
                             <input v-model="address" class="input" placeholder="Av. Corrientes 1234" />
@@ -231,34 +252,39 @@ async function placeOrder() {
                 <!-- Items -->
                 <section class="card p-6">
                     <div class="flex items-center gap-2.5 mb-5">
-                        <span class="w-7 h-7 rounded-xl bg-brand-100/70 text-brand-700 flex items-center justify-center font-bold text-xs">2</span>
-                        <h2 class="text-sm font-extrabold text-slate-805">Tu pedido</h2>
+                        <span class="w-7 h-7 rounded-xl bg-brand-100/70 dark:bg-brand-950/70 text-brand-700 dark:text-brand-300 flex items-center justify-center font-bold text-xs">2</span>
+                        <h2 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">Tu pedido</h2>
                     </div>
-                    <ul class="divide-y divide-slate-100">
+                    <ul class="divide-y divide-slate-100 dark:divide-slate-800">
                         <li
                             v-for="item in cart.items"
                             :key="item.id"
                             class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
                         >
-                            <div class="w-12 h-12 bg-slate-50 border border-slate-100 rounded-xl overflow-hidden flex-shrink-0">
+                            <div class="w-12 h-12 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden flex-shrink-0">
                                 <img
                                     v-if="item.product.image && !imageErrors[item.id]"
                                     :src="item.product.image"
+                                    :alt="item.product.name"
+                                    width="48"
+                                    height="48"
+                                    loading="lazy"
+                                    decoding="async"
                                     class="w-full h-full object-cover"
                                     referrerpolicy="no-referrer"
                                     @error="imageErrors[item.id] = true"
                                 />
-                                <div v-else class="w-full h-full flex items-center justify-center bg-slate-50 text-slate-350">
+                                <div v-else class="w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400">
                                     <SvgIcon name="box" size="0.95rem" />
                                 </div>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="font-bold text-slate-850 text-xs line-clamp-1">{{ item.product.name }}</p>
+                                <p class="font-bold text-slate-900 dark:text-slate-100 text-xs line-clamp-1">{{ item.product.name }}</p>
                                 <p class="text-[10px] text-slate-400 font-semibold mt-1">
                                     Cant: {{ item.qty }} × {{ formatPrice(item.product.final_price ?? item.product.price) }}
                                 </p>
                             </div>
-                            <span class="font-extrabold text-slate-800 text-xs">
+                            <span class="font-extrabold text-slate-800 dark:text-slate-100 text-xs">
                                 {{ formatPrice(item.subtotal) }}
                             </span>
                         </li>
@@ -270,18 +296,18 @@ async function placeOrder() {
                 <!-- Mínimo de compra (barra de progreso) -->
                 <div class="card p-6">
                     <div class="flex items-center justify-between mb-2.5">
-                        <span class="text-xs font-bold text-slate-700">
+                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
                             🛒 Compra mínima: {{ formatPrice(cart.minPurchase) }}
                         </span>
                         <span
                             class="text-xs font-bold"
-                            :class="cart.meetsMinimum ? 'text-emerald-600' : 'text-rose-500'"
+                            :class="cart.meetsMinimum ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'"
                         >
                             {{ Math.round(cart.progress) }}%
                         </span>
                     </div>
 
-                    <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div class="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
                             class="h-full rounded-full transition-all duration-500 ease-out"
                             :class="cart.meetsMinimum
@@ -293,38 +319,38 @@ async function placeOrder() {
 
                     <p
                         v-if="!cart.meetsMinimum"
-                        class="text-[11px] text-rose-500 font-bold mt-2 leading-snug"
+                        class="text-[11px] text-rose-500 dark:text-rose-400 font-bold mt-2 leading-snug"
                     >
                         Te faltan {{ formatPrice(cart.remaining) }} para alcanzar el mínimo.
                     </p>
                     <p
                         v-else
-                        class="text-[11px] text-emerald-600 font-bold mt-2 leading-snug"
+                        class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-2 leading-snug"
                     >
                         ✓ ¡Mínimo alcanzado! Podés confirmar tu pedido.
                     </p>
                 </div>
 
                 <div class="card p-6 space-y-4">
-                    <h2 class="font-bold text-slate-850 text-sm tracking-tight border-b border-slate-100 pb-2">Total a pagar</h2>
-                    <div class="space-y-3.5 text-xs font-semibold text-slate-500">
+                    <h2 class="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight border-b border-slate-100 dark:border-slate-800 pb-2">Total a pagar</h2>
+                    <div class="space-y-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
                         <div class="flex justify-between">
                             <span>Subtotal</span>
-                            <span class="font-bold text-slate-800">{{ formatPrice(cart.total) }}</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-100">{{ formatPrice(cart.total) }}</span>
                         </div>
-                        <div v-if="coupon.appliedCoupon" class="flex justify-between text-emerald-600">
+                        <div v-if="coupon.appliedCoupon" class="flex justify-between text-emerald-600 dark:text-emerald-400">
                             <span>Descuento ({{ coupon.appliedCoupon.code }})</span>
                             <span class="font-bold">-{{ formatPrice(coupon.discount) }}</span>
                         </div>
                         <div class="flex justify-between">
                             <span>Envío</span>
-                            <span class="text-emerald-700">Gratis</span>
+                            <span class="text-emerald-700 dark:text-emerald-400">Gratis</span>
                         </div>
                     </div>
-                    <hr class="border-slate-100" />
+                    <hr class="border-slate-100 dark:border-slate-800" />
                     <div class="flex justify-between items-baseline">
-                        <span class="font-bold text-slate-800 text-xs">Total</span>
-                        <span class="text-2xl font-black text-slate-805">
+                        <span class="font-bold text-slate-800 dark:text-slate-100 text-xs">Total</span>
+                        <span class="text-2xl font-black text-slate-800 dark:text-slate-100">
                             {{ formatPrice(coupon.appliedCoupon ? coupon.finalSubtotal : cart.total) }}
                         </span>
                     </div>

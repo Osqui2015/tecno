@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue';
+import { onMounted, computed, ref } from 'vue';
 import { useWishlistStore } from '@/stores/wishlist';
 import { useCartStore } from '@/stores/cart';
 import { useAuthStore } from '@/stores/auth';
@@ -8,11 +8,14 @@ import PageHeader from '@/components/PageHeader.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const wishlist = useWishlistStore();
 const cart = useCartStore();
 const auth = useAuthStore();
 const router = useRouter();
+
+const imageErrors = ref<Record<number, boolean>>({});
 
 onMounted(() => {
     if (auth.isAuthenticated) {
@@ -20,8 +23,7 @@ onMounted(() => {
     }
 });
 
-const formatPrice = (n: number | string) =>
-    '$' + Math.round(Number(n)).toLocaleString('es-AR');
+const formatPrice = formatCurrency;
 
 async function moveToCart(productId: number) {
     await cart.add(productId, 1);
@@ -69,27 +71,33 @@ async function browse() {
                     class="block aspect-square bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden"
                 >
                     <img
-                        v-if="item.product.image"
+                        v-if="item.product.image && !imageErrors[item.product.id]"
                         :src="item.product.image"
                         :alt="item.product.name"
+                        width="300"
+                        height="300"
+                        loading="lazy"
+                        decoding="async"
                         class="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                         referrerpolicy="no-referrer"
+                        @error="imageErrors[item.product.id] = true"
                     />
-                    <div v-else class="w-full h-full flex items-center justify-center text-slate-300">
+                    <div v-else class="w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 gap-1.5 p-4 text-center">
                         <SvgIcon name="box" size="2rem" />
+                        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Sin imagen</span>
                     </div>
                 </router-link>
                 <div class="p-4 flex-1 flex flex-col">
                     <router-link
                         :to="{ name: 'product-detail', params: { id: item.product.id } }"
-                        class="font-bold text-sm text-slate-800 line-clamp-2 hover:text-brand-600 transition-colors"
+                        class="font-bold text-sm text-slate-800 dark:text-slate-100 line-clamp-2 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
                     >
                         {{ item.product.name }}
                     </router-link>
-                    <p class="text-lg font-black text-slate-800 mt-2">
+                    <p class="text-lg font-black text-slate-800 dark:text-slate-100 mt-2">
                         {{ formatPrice(item.product.final_price ?? item.product.price) }}
                     </p>
-                    <div class="flex gap-1 mt-3 pt-3 border-t border-slate-100">
+                    <div class="flex gap-1 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                         <button
                             @click="moveToCart(item.product.id)"
                             class="btn btn-primary btn-sm flex-1"

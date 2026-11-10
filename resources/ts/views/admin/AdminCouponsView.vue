@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue';
-import axios from 'axios';
+import axios from '@/bootstrap';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
+import BaseModal from '@/components/BaseModal.vue';
 
 interface Coupon {
     id: number;
@@ -48,6 +49,16 @@ const form = reactive({
 
 const formErrors = ref<Record<string, string[]>>({});
 const saving = ref(false);
+const feedback = ref<{ message: string; type: 'success' | 'error' } | null>(null);
+let feedbackTimer: any = null;
+
+function notify(message: string, type: 'success' | 'error' = 'success') {
+    feedback.value = { message, type };
+    if (feedbackTimer) clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => {
+        feedback.value = null;
+    }, 4000);
+}
 
 async function loadCoupons() {
     loading.value = true;
@@ -63,14 +74,33 @@ async function loadCoupons() {
             last_page: data.last_page,
             total: data.total
         };
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error cargando cupones', err);
+        notify(err.response?.data?.message || 'Error al cargar los cupones.', 'error');
     } finally {
         loading.value = false;
     }
 }
 
-watch(filters, loadCoupons, { deep: true });
+let searchTimer: any = null;
+
+watch(
+    () => [filters.search, filters.active],
+    () => {
+        filters.page = 1;
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            loadCoupons();
+        }, 300);
+    }
+);
+
+watch(
+    () => filters.page,
+    () => {
+        loadCoupons();
+    }
+);
 
 onMounted(() => {
     loadCoupons();
@@ -121,8 +151,10 @@ async function saveCoupon() {
 
         if (editingCoupon.value) {
             await axios.patch(`/admin/coupons/${editingCoupon.value.id}`, payload);
+            notify('Cupón actualizado correctamente.');
         } else {
             await axios.post('/admin/coupons', payload);
+            notify('Cupón creado correctamente.');
         }
 
         showModal.value = false;
@@ -130,6 +162,8 @@ async function saveCoupon() {
     } catch (err: any) {
         if (err.response?.status === 422) {
             formErrors.value = err.response.data.errors || {};
+        } else {
+            notify(err.response?.data?.message || 'Error al guardar el cupón.', 'error');
         }
     } finally {
         saving.value = false;
@@ -140,18 +174,29 @@ async function toggleActive(coupon: Coupon) {
     try {
         const { data } = await axios.patch(`/admin/coupons/${coupon.id}/toggle`);
         coupon.active = data.coupon.active;
-    } catch (err) {
+        notify(`Cupón ${coupon.active ? 'activado' : 'desactivado'} con éxito.`);
+    } catch (err: any) {
         console.error('Error cambiando estado del cupón', err);
+        notify(err.response?.data?.message || 'Error al cambiar estado del cupón.', 'error');
     }
 }
 
-async function deleteCoupon(coupon: Coupon) {
-    if (!confirm(`¿Seguro que deseas eliminar el cupón "${coupon.code}"?`)) return;
+const couponToDelete = ref<Coupon | null>(null);
+
+function promptDelete(coupon: Coupon) {
+    couponToDelete.value = coupon;
+}
+
+async function executeDelete() {
+    if (!couponToDelete.value) return;
     try {
-        await axios.delete(`/admin/coupons/${coupon.id}`);
+        await axios.delete(`/admin/coupons/${couponToDelete.value.id}`);
+        notify(`Cupón "${couponToDelete.value.code}" eliminado con éxito.`);
+        couponToDelete.value = null;
         loadCoupons();
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error eliminando cupón', err);
+        notify(err.response?.data?.message || 'Error al eliminar cupón.', 'error');
     }
 }
 
@@ -163,6 +208,25 @@ const formatCurrency = (val: number | string | null) => {
 
 <template>
     <div class="space-y-5">
+        <!-- Feedback alert -->
+        <transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="opacity-0 -translate-y-2"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-2"
+        >
+            <div
+                v-if="feedback"
+                :class="feedback.type === 'error' ? 'bg-red-500/15 border-red-500 text-red-700 dark:text-red-400' : 'bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-400'"
+                class="p-4 rounded-xl border flex items-center justify-between text-sm"
+            >
+                <span>{{ feedback.message }}</span>
+                <button @click="feedback = null" class="text-xs font-semibold underline ml-3">Cerrar</button>
+            </div>
+        </transition>
+
         <!-- Encabezado & Filtros -->
         <div class="card p-5 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -257,7 +321,7 @@ const formatCurrency = (val: number | string | null) => {
                                 <button @click="openEditModal(c)" class="btn btn-secondary text-xs px-2.5 py-1">
                                     Editar
                                 </button>
-                                <button @click="deleteCoupon(c)" class="btn btn-danger text-xs px-2.5 py-1">
+                                <button @click="promptDelete(c)" class="btn btn-danger text-xs px-2.5 py-1">
                                     Eliminar
                                 </button>
                             </td>
@@ -288,116 +352,131 @@ const formatCurrency = (val: number | string | null) => {
             </div>
         </div>
 
-        <!-- Modal Crear/Editar -->
-        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <div class="card p-6 w-full max-w-lg space-y-4 shadow-xl">
-                <div class="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
-                    <h3 class="font-bold text-lg text-slate-800 dark:text-slate-100">
-                        {{ editingCoupon ? 'Editar Cupón' : 'Nuevo Cupón' }}
-                    </h3>
-                    <button @click="showModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+        <!-- Modal Crear/Editar accesible -->
+        <BaseModal
+            :show="showModal"
+            :title="editingCoupon ? 'Editar Cupón' : 'Nuevo Cupón'"
+            @close="showModal = false"
+        >
+            <form @submit.prevent="saveCoupon" class="space-y-4 text-sm">
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Código del Cupón</label>
+                    <input
+                        v-model="form.code"
+                        type="text"
+                        placeholder="Ej. VERANO2026"
+                        class="input font-mono uppercase"
+                        required
+                    />
+                    <p v-if="formErrors.code" class="text-xs text-red-500 mt-1">{{ formErrors.code[0] }}</p>
                 </div>
 
-                <form @submit.prevent="saveCoupon" class="space-y-4 text-sm">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Código del Cupón</label>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Descuento</label>
+                        <select v-model="form.type" class="input">
+                            <option value="percent">Porcentaje (%)</option>
+                            <option value="fixed">Monto Fijo ($)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Valor</label>
                         <input
-                            v-model="form.code"
-                            type="text"
-                            placeholder="Ej. VERANO2026"
-                            class="input font-mono uppercase"
+                            v-model.number="form.value"
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            class="input"
                             required
                         />
-                        <p v-if="formErrors.code" class="text-xs text-red-500 mt-1">{{ formErrors.code[0] }}</p>
+                        <p v-if="formErrors.value" class="text-xs text-red-500 mt-1">{{ formErrors.value[0] }}</p>
                     </div>
+                </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de Descuento</label>
-                            <select v-model="form.type" class="input">
-                                <option value="percent">Porcentaje (%)</option>
-                                <option value="fixed">Monto Fijo ($)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Valor</label>
-                            <input
-                                v-model.number="form.value"
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                class="input"
-                                required
-                            />
-                            <p v-if="formErrors.value" class="text-xs text-red-500 mt-1">{{ formErrors.value[0] }}</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Subtotal Mínimo ($)</label>
-                            <input
-                                v-model.number="form.min_subtotal"
-                                type="number"
-                                step="0.01"
-                                placeholder="Opcional"
-                                class="input"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Límite de Usos</label>
-                            <input
-                                v-model.number="form.max_uses"
-                                type="number"
-                                placeholder="Ilimitado si es vacío"
-                                class="input"
-                            />
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha Inicio</label>
-                            <input
-                                v-model="form.starts_at"
-                                type="date"
-                                class="input"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha Expiración</label>
-                            <input
-                                v-model="form.expires_at"
-                                type="date"
-                                class="input"
-                            />
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-2 pt-2">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Subtotal Mínimo ($)</label>
                         <input
-                            v-model="form.active"
-                            type="checkbox"
-                            id="active_check"
-                            class="rounded text-primary-600"
+                            v-model.number="form.min_subtotal"
+                            type="number"
+                            step="0.01"
+                            placeholder="Opcional"
+                            class="input"
                         />
-                        <label for="active_check" class="font-medium text-slate-700 dark:text-slate-300">Cupón Activo</label>
                     </div>
 
-                    <div class="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                        <button type="button" @click="showModal = false" class="btn btn-secondary">
-                            Cancelar
-                        </button>
-                        <button type="submit" :disabled="saving" class="btn btn-primary flex items-center gap-2">
-                            <LoadingSpinner v-if="saving" size="sm" />
-                            <span>{{ editingCoupon ? 'Guardar Cambios' : 'Crear Cupón' }}</span>
-                        </button>
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Límite de Usos</label>
+                        <input
+                            v-model.number="form.max_uses"
+                            type="number"
+                            placeholder="Ilimitado si es vacío"
+                            class="input"
+                        />
                     </div>
-                </form>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha Inicio</label>
+                        <input
+                            v-model="form.starts_at"
+                            type="date"
+                            class="input"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha Expiración</label>
+                        <input
+                            v-model="form.expires_at"
+                            type="date"
+                            class="input"
+                        />
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2">
+                    <input
+                        v-model="form.active"
+                        type="checkbox"
+                        id="active_check"
+                        class="rounded text-primary-600"
+                    />
+                    <label for="active_check" class="font-medium text-slate-700 dark:text-slate-300">Cupón Activo</label>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" @click="showModal = false" class="btn btn-secondary">
+                        Cancelar
+                    </button>
+                    <button type="submit" :disabled="saving" class="btn btn-primary flex items-center gap-2">
+                        <LoadingSpinner v-if="saving" size="sm" />
+                        <span>{{ editingCoupon ? 'Guardar Cambios' : 'Crear Cupón' }}</span>
+                    </button>
+                </div>
+            </form>
+        </BaseModal>
+
+        <!-- Modal Confirmar Eliminación accesible -->
+        <BaseModal
+            :show="couponToDelete !== null"
+            title="Confirmar eliminación"
+            maxWidth="max-w-md"
+            @close="couponToDelete = null"
+        >
+            <p class="text-sm text-slate-600 dark:text-slate-300">
+                ¿Seguro que deseás eliminar el cupón <strong>"{{ couponToDelete?.code }}"</strong>? Esta acción no se puede deshacer.
+            </p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" @click="couponToDelete = null" class="btn btn-secondary text-xs">
+                    Cancelar
+                </button>
+                <button type="button" @click="executeDelete" class="btn btn-danger text-xs">
+                    Sí, eliminar
+                </button>
             </div>
-        </div>
+        </BaseModal>
     </div>
 </template>

@@ -1,16 +1,42 @@
 <script setup lang="ts">
 import { onMounted, computed, ref } from 'vue';
-import { useProductsStore } from '@/stores/products';
+import { useProductsStore, type Product } from '@/stores/products';
+import axios from '@/bootstrap';
 import ProductCard from '@/components/ProductCard.vue';
 import LoadingSpinner from '@/components/LoadingSpinner.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import ProductAutocomplete from '@/components/ProductAutocomplete.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const store = useProductsStore();
 const heroImageError = ref(false);
 
+const featuredProducts = ref<Product[]>([]);
+const recentProducts = ref<Product[]>([]);
+const loadingFeatured = ref(false);
+const loadingRecent = ref(false);
+
+async function loadHomeSections() {
+    loadingFeatured.value = true;
+    loadingRecent.value = true;
+    try {
+        const [featuredRes, recentRes] = await Promise.all([
+            axios.get('/products', { params: { per_page: 5, sort_by: 'featured' } }),
+            axios.get('/products', { params: { per_page: 10, sort_by: 'newest' } }),
+        ]);
+        featuredProducts.value = featuredRes.data?.data || [];
+        recentProducts.value = recentRes.data?.data || [];
+    } catch (err) {
+        console.error('Error cargando secciones destacadas en Home', err);
+    } finally {
+        loadingFeatured.value = false;
+        loadingRecent.value = false;
+    }
+}
+
 onMounted(() => {
+    loadHomeSections();
     if (store.products.length === 0) {
         store.fetchProducts();
     }
@@ -19,21 +45,18 @@ onMounted(() => {
     }
 });
 
-// Destacados: productos con stock disponible, ordenados por más recientes.
-// Antes se mostraban "Best Sellers" y "Top Articles" que eran slices arbitrarios
-// del array (no eran realmente los más vendidos). Ahora se muestran como
-// "Destacados" y "Recientes" sin mentir al usuario.
+// Destacados: productos con mayor stock / destacados por el backend
 const bestSellers = computed(() =>
-    store.products
-        .filter((p) => p.stock > 0)
-        .slice(0, 5)
+    featuredProducts.value.length > 0
+        ? featuredProducts.value
+        : store.products.filter((p) => p.stock > 0).slice(0, 5)
 );
 
-// "Recientes": últimos actualizados que tengan stock. No pretende ser top ventas.
+// "Recientes": últimos productos ingresados al catálogo
 const topArticles = computed(() =>
-    store.products
-        .filter((p) => p.stock > 0)
-        .slice(5, 15)
+    recentProducts.value.length > 0
+        ? recentProducts.value
+        : store.products.filter((p) => p.stock > 0).slice(5, 15)
 );
 
 // Productos extra para mostrar abajo (después de bestSellers + topArticles).
@@ -111,7 +134,7 @@ function clearMoreFilters() {
 }
 
 // Highlighted hero product for the media block on the right of the Hero (sketch layout)
-const heroProduct = computed(() => store.products.find(p => p.stock > 0) || store.products[0]);
+const heroProduct = computed(() => featuredProducts.value[0] || store.products.find(p => p.stock > 0) || store.products[0]);
 
 // Categories formatted for sketch grid
 const categoriesWithCount = computed(() => {
@@ -192,9 +215,7 @@ function getCategoryDescription(cat: { name: string; description?: string | null
     return cat.description;
 }
 
-const formatPrice = (n: number) => {
-    return '$' + Math.round(n).toLocaleString('es-AR');
-};
+const formatPrice = formatCurrency;
 </script>
 
 <template>
@@ -287,7 +308,7 @@ const formatPrice = (n: number) => {
                 <router-link
                     v-for="cat in store.categories"
                     :key="cat.id"
-                    :to="{ name: 'products-by-category', params: { slug: cat.name } }"
+                    :to="{ name: 'products-by-category', params: { slug: cat.slug || cat.name } }"
                     class="flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-brand-50 border border-slate-200/50 hover:border-brand-200 text-slate-800 font-bold text-xs rounded-full transition-all shadow-sm hover:scale-[1.03] cursor-pointer flex-shrink-0"
                 >
                     <span class="material-symbols-outlined text-[18px] text-slate-500">{{ getMaterialIcon(cat.name) }}</span>
@@ -314,7 +335,7 @@ const formatPrice = (n: number) => {
                 </router-link>
             </div>
 
-            <LoadingSpinner v-if="store.loading" text="Cargando catálogo..." />
+            <LoadingSpinner v-if="loadingFeatured || (store.loading && bestSellers.length === 0)" text="Cargando catálogo..." />
 
             <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 <ProductCard
@@ -334,8 +355,10 @@ const formatPrice = (n: number) => {
                 </p>
             </div>
 
+            <LoadingSpinner v-if="loadingRecent && topArticles.length === 0" text="Cargando novedades..." />
+
             <EmptyState
-                v-if="topArticles.length === 0"
+                v-else-if="topArticles.length === 0"
                 icon="box"
                 title="Aún no hay productos adicionales"
                 description="Importá productos desde el panel administrativo de Dazimportadora usando el comando."

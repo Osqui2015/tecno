@@ -73,28 +73,43 @@ export const useProductsStore = defineStore('products', () => {
         return Array.from(set).sort();
     });
 
+    const DEFAULT_PER_PAGE = 20;
+
+    function buildParams(page: number = 1, perPage: number = DEFAULT_PER_PAGE) {
+        const params: Record<string, any> = {
+            page,
+            per_page: perPage,
+        };
+        if (sortBy.value) {
+            params.sort_by = sortBy.value;
+        }
+        if (searchQuery.value.trim()) {
+            params.search = searchQuery.value.trim();
+        }
+        if (filterCategory.value) {
+            params.category_id = filterCategory.value;
+        }
+        if (filterBrand.value) {
+            params.brand = filterBrand.value;
+        }
+        if (filterSource.value && filterSource.value !== 'all') {
+            params.source = filterSource.value;
+        }
+        if (minPrice.value !== null && minPrice.value !== undefined) {
+            params.min_price = minPrice.value;
+        }
+        if (maxPrice.value !== null && maxPrice.value !== undefined) {
+            params.max_price = maxPrice.value;
+        }
+        return params;
+    }
+
     async function fetchProducts(page: number = 1) {
         loading.value = true;
         error.value = null;
         currentPage.value = page;
         try {
-            const params: any = { page, per_page: 20, sort_by: sortBy.value };
-            if (searchQuery.value.trim()) {
-                params.search = searchQuery.value.trim();
-            }
-            if (filterCategory.value) {
-                params.category_id = filterCategory.value;
-            }
-            if (filterBrand.value) {
-                params.brand = filterBrand.value;
-            }
-            if (minPrice.value !== null && minPrice.value !== undefined) {
-                params.min_price = minPrice.value;
-            }
-            if (maxPrice.value !== null && maxPrice.value !== undefined) {
-                params.max_price = maxPrice.value;
-            }
-
+            const params = buildParams(page);
             const { data } = await axios.get('/products', { params });
             if (data.available_brands) {
                 availableBrands.value = data.available_brands;
@@ -108,25 +123,8 @@ export const useProductsStore = defineStore('products', () => {
     }
 
     async function searchProducts(q: string) {
-        if (!q.trim()) {
-            searchQuery.value = '';
-            await fetchProducts();
-            return;
-        }
-        loading.value = true;
-        error.value = null;
-        try {
-            const params: any = { page: 1, per_page: 60, search: q.trim() };
-            if (filterCategory.value) {
-                params.category_id = filterCategory.value;
-            }
-            const { data } = await axios.get('/products/searchproduc', { params });
-            applyPageResponse(data, /*reset=*/ true);
-        } catch (e: any) {
-            error.value = 'Error al buscar productos';
-        } finally {
-            loading.value = false;
-        }
+        searchQuery.value = q;
+        await fetchProducts(1);
     }
 
     async function fetchMore() {
@@ -134,13 +132,7 @@ export const useProductsStore = defineStore('products', () => {
         const nextPage = currentPage.value + 1;
         loadingMore.value = true;
         try {
-            const params: any = { page: nextPage, per_page: 60 };
-            if (searchQuery.value.trim()) {
-                params.search = searchQuery.value.trim();
-            }
-            if (filterCategory.value) {
-                params.category_id = filterCategory.value;
-            }
+            const params = buildParams(nextPage);
             const { data } = await axios.get('/products', { params });
             applyPageResponse(data, /*reset=*/ false);
         } catch (e: any) {

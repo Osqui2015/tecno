@@ -328,25 +328,18 @@ a {
 }
 
 /* ===========================================================
-   UTILIDADES — line-clamp
+   ACCESIBILIDAD — prefers-reduced-motion
    =========================================================== */
-.line-clamp-1 {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+@media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+        animation-delay: -1ms !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        background-attachment: initial !important;
+        scroll-behavior: auto !important;
+        transition-delay: 0s !important;
+        transition-duration: 0s !important;
+    }
 }
 
 /* ===========================================================
@@ -429,13 +422,12 @@ a {
     transform: translateY(-4px);
 }
 
-/* Specific override for SVG icons in dark headers/navigation */
-header svg, nav svg {
-    stroke: rgb(241 244 247) !important;
+/* Specific override for SVG icons in explicitly dark headers/navigation */
+.site-header-dark svg, .site-nav-dark svg {
+    stroke: rgb(241 244 247);
 }
 
-/* Specific override for white links in dark navigation bar */
-.nav-link {
-    color: #ffffff !important;
-    text-decoration: none !important;
+.site-header-dark .nav-link, .site-nav-dark .nav-link {
+    color: #ffffff;
+    text-decoration: none;
 }

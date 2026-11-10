@@ -11,6 +11,8 @@ import EmptyState from '@/components/EmptyState.vue';
 import ProductCard from '@/components/ProductCard.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import ShareButtons from '@/components/ShareButtons.vue';
+import BaseModal from '@/components/BaseModal.vue';
+import { formatCurrency } from '@/utils/formatters';
 
 const route = useRoute();
 const router = useRouter();
@@ -72,9 +74,17 @@ async function submitReview() {
     }
 }
 
-async function deleteReview(reviewId: number) {
-    if (!confirm('¿Eliminar tu reseña?')) return;
-    await reviewsStore.deleteReview(reviewId);
+const reviewToDelete = ref<number | null>(null);
+
+function promptDeleteReview(reviewId: number) {
+    reviewToDelete.value = reviewId;
+}
+
+async function executeDeleteReview() {
+    if (reviewToDelete.value !== null) {
+        await reviewsStore.deleteReview(reviewToDelete.value);
+        reviewToDelete.value = null;
+    }
 }
 
 const product = computed(() => productsStore.currentProduct);
@@ -87,8 +97,7 @@ const displayPrice = computed(() => {
     return listPrice > 0 ? listPrice : Number(product.value.price ?? 0);
 });
 
-const formatPrice = (n: number) =>
-    '$' + Math.round(n).toLocaleString('es-AR');
+const formatPrice = formatCurrency;
 
 async function addToCart() {
     if (!product.value?.id) return;
@@ -160,7 +169,7 @@ const shareText = computed(() => {
                 {
                     label: product.category?.name ?? 'Productos',
                     to: product.category
-                        ? { name: 'products-by-category', params: { slug: product.category.name } }
+                        ? { name: 'products-by-category', params: { slug: product.category.slug || product.category.name } }
                         : { name: 'products' },
                 },
                 { label: product.name ?? '' },
@@ -184,7 +193,7 @@ const shareText = computed(() => {
                         v-else
                         class="w-full h-full flex flex-col items-center justify-center bg-slate-50 text-slate-400 gap-3 p-6 text-center"
                     >
-                        <div class="w-16 h-16 rounded-full bg-slate-100/80 flex items-center justify-center text-slate-350 shadow-inner">
+                        <div class="w-16 h-16 rounded-full bg-slate-100/80 flex items-center justify-center text-slate-400 shadow-inner">
                             <SvgIcon name="box" size="2.35rem" />
                         </div>
                         <span class="text-xs uppercase font-extrabold tracking-wider text-slate-400">Sin imagen</span>
@@ -207,7 +216,7 @@ const shareText = computed(() => {
                     <div class="flex flex-wrap items-center gap-2 mb-3">
                         <router-link
                             v-if="product.category"
-                            :to="{ name: 'products-by-category', params: { slug: product.category.name } }"
+                            :to="{ name: 'products-by-category', params: { slug: product.category.slug || product.category.name } }"
                             class="chip chip-brand hover:opacity-80 transition-opacity"
                         >
                             {{ product.category.name }}
@@ -231,8 +240,8 @@ const shareText = computed(() => {
                 </div>
 
                 <div v-if="product.description" class="space-y-2">
-                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-450">Descripción</h3>
-                    <p class="text-sm text-slate-650 leading-relaxed font-medium">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Descripción</h3>
+                    <p class="text-sm text-slate-600 leading-relaxed font-medium">
                         {{ product.description }}
                     </p>
                 </div>
@@ -438,7 +447,7 @@ const shareText = computed(() => {
                         </p>
                         <button
                             v-if="auth.user?.id === review.user_id"
-                            @click="deleteReview(review.id)"
+                            @click="promptDeleteReview(review.id)"
                             class="mt-2 text-xs text-rose-500 hover:text-rose-700 font-bold transition-colors"
                         >
                             Eliminar
@@ -447,5 +456,25 @@ const shareText = computed(() => {
                 </template>
             </div>
         </section>
+
+        <!-- Modal Confirmar Eliminación Reseña -->
+        <BaseModal
+            :show="reviewToDelete !== null"
+            title="Eliminar reseña"
+            maxWidth="max-w-md"
+            @close="reviewToDelete = null"
+        >
+            <p class="text-sm text-slate-600 dark:text-slate-300">
+                ¿Seguro que deseás eliminar tu reseña?
+            </p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" @click="reviewToDelete = null" class="btn btn-secondary text-xs">
+                    Cancelar
+                </button>
+                <button type="button" @click="executeDeleteReview" class="btn btn-danger text-xs">
+                    Sí, eliminar
+                </button>
+            </div>
+        </BaseModal>
     </div>
 </template>

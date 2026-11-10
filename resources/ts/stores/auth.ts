@@ -59,17 +59,47 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    async function login(email: string, password: string): Promise<boolean> {
+    if (typeof window !== 'undefined') {
+        window.addEventListener('auth:unauthorized', () => {
+            token.value = null;
+            user.value = null;
+        });
+    }
+
+    async function login(
+        email: string,
+        password: string
+    ): Promise<{ success: boolean; requires2fa?: boolean }> {
         loading.value = true;
         error.value = null;
         try {
             const { data } = await axios.post('/login', { email, password });
+            if (data.requires_2fa) {
+                return { success: false, requires2fa: true };
+            }
+            token.value = data.token;
+            user.value = data.user;
+            persist();
+            return { success: true };
+        } catch (e: any) {
+            error.value = e.response?.data?.message || 'Error al iniciar sesión';
+            return { success: false };
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    async function challenge2fa(email: string, code: string): Promise<boolean> {
+        loading.value = true;
+        error.value = null;
+        try {
+            const { data } = await axios.post('/auth/2fa-challenge', { email, code });
             token.value = data.token;
             user.value = data.user;
             persist();
             return true;
         } catch (e: any) {
-            error.value = e.response?.data?.message || 'Error al iniciar sesión';
+            error.value = e.response?.data?.message || 'Código de verificación inválido';
             return false;
         } finally {
             loading.value = false;
@@ -81,18 +111,23 @@ export const useAuthStore = defineStore('auth', () => {
         email: string,
         phone: string,
         password: string,
-        password_confirmation: string
+        password_confirmation: string,
+        lastname?: string
     ): Promise<boolean> {
         loading.value = true;
         error.value = null;
         try {
-            const { data } = await axios.post('/register', {
+            const payload: any = {
                 name,
                 email,
                 phone,
                 password,
                 password_confirmation,
-            });
+            };
+            if (lastname) {
+                payload.lastname = lastname;
+            }
+            const { data } = await axios.post('/register', payload);
             token.value = data.token;
             user.value = data.user;
             persist();
@@ -152,6 +187,7 @@ export const useAuthStore = defineStore('auth', () => {
         canManageUsers,
         effectiveRoles,
         login,
+        challenge2fa,
         register,
         logout,
         fetchUser,

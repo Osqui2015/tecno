@@ -67,15 +67,27 @@ async function verify() {
     }
 }
 
+const showDisableModal = ref(false);
+const disablePassword = ref('');
+const disableCode = ref('');
+
 async function disable() {
-    if (!confirm('¿Desactivar 2FA? Tu cuenta quedará menos segura.')) return;
     actionLoading.value = true;
+    error.value = null;
     try {
-        await axios.delete('/me/two-factor');
-        success.value = '2FA desactivado';
+        await axios.delete('/me/two-factor', {
+            data: {
+                password: disablePassword.value,
+                code: disableCode.value.trim(),
+            }
+        });
+        success.value = '2FA desactivado correctamente';
+        showDisableModal.value = false;
+        disablePassword.value = '';
+        disableCode.value = '';
         await fetchStatus();
-    } catch (e) {
-        error.value = 'No se pudo desactivar';
+    } catch (e: any) {
+        error.value = e.response?.data?.message || 'Error al desactivar 2FA. Verificá tu contraseña y código.';
     } finally {
         actionLoading.value = false;
     }
@@ -135,9 +147,33 @@ const qrInstructions = computed(() => {
             <p class="text-sm text-slate-600">
                 Cada vez que inicies sesión, te pediremos un código de 6 dígitos de tu app autenticadora.
             </p>
-            <button @click="disable" :disabled="actionLoading" class="btn btn-danger">
-                Desactivar 2FA
-            </button>
+            <div v-if="!showDisableModal">
+                <button @click="showDisableModal = true" :disabled="actionLoading" class="btn btn-danger">
+                    Desactivar 2FA
+                </button>
+            </div>
+            <div v-else class="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-xl space-y-3 animate-fade-in">
+                <h4 class="font-bold text-sm text-rose-800 dark:text-rose-300">Confirmar desactivación de 2FA</h4>
+                <p class="text-xs text-rose-700 dark:text-rose-400">Por seguridad, ingresá tu contraseña actual y el código de tu app autenticadora o código de recuperación.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold mb-1">Contraseña actual</label>
+                        <input v-model="disablePassword" type="password" placeholder="Tu contraseña" class="input input-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1">Código 2FA / Recuperación</label>
+                        <input v-model="disableCode" type="text" placeholder="123456" class="input input-sm font-mono" maxlength="12" />
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button @click="disable" :disabled="actionLoading || !disablePassword || !disableCode" class="btn btn-danger btn-sm">
+                        {{ actionLoading ? 'Desactivando...' : 'Confirmar desactivación' }}
+                    </button>
+                    <button @click="showDisableModal = false" class="btn btn-ghost btn-sm">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Estado: no activado — paso 1 -->

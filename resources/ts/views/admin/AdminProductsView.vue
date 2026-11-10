@@ -408,7 +408,7 @@ async function uploadCsv() {
                 <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
                     <div class="p-5 border-b border-slate-100 flex items-center justify-between">
                         <h3 class="font-extrabold text-base">Aumento global de precio</h3>
-                        <button @click="showBulkModal = false" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center">
+                        <button @click="showBulkModal = false" class="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center cursor-pointer" aria-label="Cerrar modal">
                             <SvgIcon name="close" size="1rem" />
                         </button>
                     </div>
@@ -448,7 +448,7 @@ async function uploadCsv() {
                 <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 dark:border-slate-800">
                     <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                         <h3 class="font-extrabold text-base text-slate-800 dark:text-slate-100">Importar Productos desde CSV</h3>
-                        <button @click="showImportModal = false" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                        <button @click="showImportModal = false" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer" aria-label="Cerrar modal">
                             <SvgIcon name="close" size="1rem" />
                         </button>
                     </div>
