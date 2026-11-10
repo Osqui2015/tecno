@@ -67,4 +67,34 @@ class AdminStatsTest extends TestCase
             ->getJson('/api/admin/stats')
             ->assertStatus(403);
     }
+
+    #[Test]
+    public function margins_endpoint_handles_null_markup_without_breaking_totals(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        // Producto con markup null y precio 100
+        Product::factory()->create([
+            'price'          => 100,
+            'markup_percent' => null,
+            'active'         => true,
+            'stock'          => 10,
+        ]);
+
+        // Producto con markup 20% y precio 200
+        Product::factory()->create([
+            'price'          => 200,
+            'markup_percent' => 20,
+            'active'         => true,
+            'stock'          => 10,
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/admin/products/margins?group_by=none');
+
+        $response->assertOk()
+            ->assertJsonPath('global.product_count', 2)
+            ->assertJsonPath('global.total_base_price', 300)
+            ->assertJsonPath('global.total_final_price', 340); // 100 + (200 * 1.20 = 240) = 340
+    }
 }

@@ -70,6 +70,7 @@ class AdminAccessTest extends TestCase
         $payload = [
             'name'                  => 'Nuevo',
             'email'                 => 'nuevo@example.com',
+            'phone'                 => '1141234567',
             'password'              => 'password123',
             'password_confirmation' => 'password123',
         ];
@@ -86,6 +87,7 @@ class AdminAccessTest extends TestCase
         $payload = [
             'name'                  => 'Hacker',
             'email'                 => 'hacker@example.com',
+            'phone'                 => '1141234567',
             'password'              => 'password123',
             'password_confirmation' => 'password123',
             'role'                  => 'admin', // intento malicioso

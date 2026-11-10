@@ -252,6 +252,31 @@ class AdminOrderTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('origin_label', 'mixed')
             ->assertJsonPath('items_count_daz', 1)
-            ->assertJsonPath('items_count_manual', 1);
+            ->assertJsonPath('items_count_manual', 1)
+            ->assertJsonPath('items_count_tero', 0);
+    }
+
+    #[Test]
+    public function deleting_order_returns_stock_when_not_cancelled(): void
+    {
+        $admin = $this->admin();
+        $product = Product::factory()->create(['stock' => 5]);
+
+        $order = Order::factory()->create(['status' => Order::STATUS_PENDING]);
+        OrderItem::factory()->create([
+            'order_id'   => $order->id,
+            'product_id' => $product->id,
+            'qty'        => 3,
+            'price'      => 50,
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/admin/orders/{$order->id}");
+
+        $response->assertOk()
+            ->assertJsonPath('message', 'Pedido eliminado');
+
+        $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+        $this->assertEquals(8, $product->fresh()->stock);
     }
 }

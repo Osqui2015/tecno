@@ -61,6 +61,22 @@ class BuyerFlowTest extends TestCase
     }
 
     #[Test]
+    public function buyer_can_clear_optional_profile_fields(): void
+    {
+        $buyer = $this->makeBuyerWithProfile();
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->patchJson('/api/me/profile', [
+                'city'     => '',
+                'zip_code' => '',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('user.city', null)
+            ->assertJsonPath('user.zip_code', null);
+    }
+
+    #[Test]
     public function buyer_cannot_escalate_role_via_profile_update(): void
     {
         $buyer = $this->makeBuyerWithProfile();
@@ -391,5 +407,229 @@ class BuyerFlowTest extends TestCase
 
         $response->assertStatus(422)->assertJsonValidationErrors(['status']);
         $this->assertEquals(Order::STATUS_CONFIRMED, $order->fresh()->status);
+    }
+
+    #[Test]
+    public function order_charges_final_price_including_markup_and_snapshots_in_order_items(): void
+    {
+        config(['store.min_purchase' => 0]);
+
+        $buyer   = $this->makeBuyerWithProfile();
+        $product = Product::factory()->create([
+            'price'          => 100,
+            'markup_percent' => 20, // final_price = 120.00
+            'stock'          => 10,
+        ]);
+
+        $cartItem = CartItem::create([
+            'user_id'    => $buyer->id,
+            'product_id' => $product->id,
+            'qty'        => 2,
+        ]);
+
+        // Subtotal en cart debe reflejar final_price (120 * 2 = 240)
+        $this->assertEquals(240.00, $cartItem->subtotal);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->postJson('/api/orders', []);
+
+        $response->assertCreated()
+            ->assertJsonPath('total', '240.00');
+
+        $order = Order::with('items')->latest()->first();
+        $this->assertEquals(240.00, (float) $order->total);
+        $this->assertEquals(120.00, (float) $order->items->first()->price);
+    }
+
+    #[Test]
+    public function buyer_without_lastname_can_create_order(): void
+    {
+        config(['store.min_purchase' => 0]);
+
+        $buyer = User::factory()->create([
+            'name'     => 'Carlos',
+            'lastname' => null,
+            'phone'    => '+54 11 5555-9999',
+            'address'  => 'Calle Falsa 123',
+            'city'     => 'Rosario',
+        ]);
+
+        $product = Product::factory()->create(['price' => 500, 'stock' => 5]);
+        CartItem::create(['user_id' => $buyer->id, 'product_id' => $product->id, 'qty' => 1]);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->postJson('/api/orders', []);
+
+        $response->assertCreated()
+            ->assertJsonPath('customer_name', 'Carlos')
+            ->assertJsonPath('customer_lastname', null);
+    }
+
+    #[Test]
+    public function manual_products_without_external_id_appear_in_catalog(): void
+    {
+        \App\Support\CacheHelper::flush(['products:public']);
+
+        $category = \App\Models\Category::factory()->create();
+        $manualProduct = Product::create([
+            'name'        => 'Producto Manual Test',
+            'price'       => 1500,
+            'stock'       => 10,
+            'category_id' => $category->id,
+            'active'      => true,
+            'external_id' => null,
+            'origin'      => 'manual',
+        ]);
+
+        $response = $this->getJson('/api/products');
+        $response->assertOk();
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($manualProduct->id, $ids);
+    }
+
+    #[Test]
+    public function calling_related_does_not_poison_show_cache_relationship(): void
+    {
+        \App\Support\CacheHelper::flush(['products:public']);
+
+        $category = \App\Models\Category::factory()->create();
+        $product = Product::factory()->create([
+            'category_id' => $category->id,
+            'stock'       => 10,
+            'active'      => true,
+        ]);
+
+        // 1) Llamar primero a /related
+        $this->getJson("/api/products/{$product->id}/related")->assertOk();
+
+        // 2) Llamar a /show inmediatamente (debe leer el cache)
+        $showResponse = $this->getJson("/api/products/{$product->id}");
+        $showResponse->assertOk()
+            ->assertJsonPath('category.id', $category->id)
+            ->assertJsonPath('category.name', $category->name);
+    }
+
+    #[Test]
+    public function checkout_normalizes_coupon_code_case_insensitively(): void
+    {
+        config(['store.min_purchase' => 0]);
+
+        $buyer   = $this->makeBuyerWithProfile();
+        $product = Product::factory()->create(['price' => 1000, 'stock' => 5]);
+        CartItem::create(['user_id' => $buyer->id, 'product_id' => $product->id, 'qty' => 1]);
+
+        $coupon = \App\Models\Coupon::create([
+            'code'     => 'PROMO10',
+            'type'     => 'percent',
+            'value'    => 10,
+            'max_uses' => 5,
+            'active'   => true,
+        ]);
+
+        // Se envía en minúsculas y con espacios
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->postJson('/api/orders', [
+                'coupon_code' => '  promo10  ',
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('discount', '100.00')
+            ->assertJsonPath('total', '900.00');
+
+        $this->assertEquals(1, $coupon->fresh()->uses_count);
+    }
+
+    #[Test]
+    public function product_with_stock_1_to_4_remains_active_and_visible_in_catalog(): void
+    {
+        \App\Support\CacheHelper::flush(['products:public']);
+
+        $product = Product::factory()->create([
+            'name'   => 'Últimas 3 Unidades',
+            'stock'  => 3,
+            'active' => true,
+        ]);
+
+        $this->assertTrue($product->fresh()->active);
+
+        $response = $this->getJson('/api/products');
+        $response->assertOk();
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($product->id, $ids);
+    }
+
+    #[Test]
+    public function purchasing_last_stock_sets_product_inactive_and_flushes_cache(): void
+    {
+        config(['store.min_purchase' => 0]);
+        \App\Support\CacheHelper::flush(['products:public']);
+
+        $buyer = $this->makeBuyerWithProfile();
+        $product = Product::factory()->create([
+            'price'  => 500,
+            'stock'  => 2,
+            'active' => true,
+        ]);
+
+        // Pre-calentar caché de producto
+        $this->getJson("/api/products/{$product->id}")->assertOk();
+
+        CartItem::create([
+            'user_id'    => $buyer->id,
+            'product_id' => $product->id,
+            'qty'        => 2,
+        ]);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->postJson('/api/orders', []);
+
+        $response->assertCreated();
+
+        $fresh = $product->fresh();
+        $this->assertEquals(0, $fresh->stock);
+        $this->assertFalse((bool) $fresh->active);
+
+        // El endpoint público ya no debe devolverlo como activo en el catálogo
+        $catalogResponse = $this->getJson('/api/products');
+        $catalogResponse->assertOk();
+        $ids = collect($catalogResponse->json('data'))->pluck('id')->all();
+        $this->assertNotContains($product->id, $ids);
+    }
+
+    #[Test]
+    public function cancelling_order_restores_stock_and_reactivates_inactive_product(): void
+    {
+        config(['store.min_purchase' => 0]);
+        \App\Support\CacheHelper::flush(['products:public']);
+
+        $buyer = $this->makeBuyerWithProfile();
+        $product = Product::factory()->create([
+            'price'  => 1000,
+            'stock'  => 0,
+            'active' => false,
+        ]);
+
+        $order = Order::factory()->create([
+            'user_id' => $buyer->id,
+            'status'  => Order::STATUS_PENDING,
+            'total'   => 1000,
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'qty'        => 1,
+            'price'      => 1000,
+        ]);
+
+        $response = $this->actingAs($buyer, 'sanctum')
+            ->postJson("/api/orders/{$order->id}/cancel", []);
+
+        $response->assertOk()
+            ->assertJsonPath('order.status', Order::STATUS_CANCELLED);
+
+        $fresh = $product->fresh();
+        $this->assertEquals(1, $fresh->stock);
+        $this->assertTrue((bool) $fresh->active);
     }
 }

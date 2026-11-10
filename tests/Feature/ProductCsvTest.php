@@ -56,4 +56,30 @@ class ProductCsvTest extends TestCase
             'name' => 'Producto Importado 1',
         ]);
     }
+
+    #[Test]
+    public function admin_can_import_csv_with_extra_columns_and_long_description(): void
+    {
+        $admin = $this->createAdmin();
+        $category = Category::factory()->create();
+
+        $longDescription = str_repeat('A', 3000);
+        // Cabecera con 7 columnas, fila con 8 columnas (columna extra al final) y descripción larga en el nombre
+        $csvContent = "SKU,Nombre,Marca,Precio Base,Stock,Activo,ID Categoria\n" .
+                      "SKU-LONG,{$longDescription},Samsung,2500,8,SI,{$category->id},ColumnaExtraIgnorada\n";
+
+        $file = UploadedFile::fake()->createWithContent('productos-largos.csv', $csvContent);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/admin/products/import/csv', [
+                'file' => $file,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $this->assertDatabaseHas('products', [
+            'sku' => 'SKU-LONG',
+        ]);
+    }
 }

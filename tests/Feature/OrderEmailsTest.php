@@ -36,7 +36,7 @@ class OrderEmailsTest extends TestCase
             ])
             ->assertOk();
 
-        Mail::assertSent(OrderStatusChanged::class, function ($mail) use ($buyer, $order) {
+        Mail::assertQueued(OrderStatusChanged::class, function ($mail) use ($buyer, $order) {
             return $mail->hasTo($buyer->email)
                 && $mail->order->id === $order->id
                 && $mail->newStatus === Order::STATUS_CONFIRMED
@@ -74,7 +74,7 @@ class OrderEmailsTest extends TestCase
             ->postJson("/api/orders/{$order->id}/cancel", [])
             ->assertOk();
 
-        Mail::assertSent(OrderStatusChanged::class, function ($mail) {
+        Mail::assertQueued(OrderStatusChanged::class, function ($mail) {
             return $mail->newStatus === Order::STATUS_CANCELLED;
         });
     }

@@ -93,13 +93,35 @@ class TwoFactorTest extends TestCase
     #[Test]
     public function user_can_disable_two_factor(): void
     {
+        $google2fa = new \PragmaRX\Google2FA\Google2FA();
+        $secret = $google2fa->generateSecretKey();
+
         $user = User::factory()->create([
+            'password' => bcrypt('secret1234'),
             'two_factor_confirmed_at' => now(),
-            'two_factor_secret' => encrypt('SOMESECRET'),
+            'two_factor_secret' => \Illuminate\Support\Facades\Crypt::encryptString($secret),
         ]);
 
+        // Falla sin credenciales
         $this->actingAs($user, 'sanctum')
-            ->deleteJson('/api/me/two-factor')
+            ->deleteJson('/api/me/two-factor', [])
+            ->assertStatus(422);
+
+        // Falla con contraseña incorrecta
+        $this->actingAs($user, 'sanctum')
+            ->deleteJson('/api/me/two-factor', [
+                'password' => 'wrongpassword',
+                'code' => $google2fa->getCurrentOtp($secret),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Contraseña incorrecta');
+
+        // Desactiva exitosamente con contraseña y código correctos
+        $this->actingAs($user, 'sanctum')
+            ->deleteJson('/api/me/two-factor', [
+                'password' => 'secret1234',
+                'code' => $google2fa->getCurrentOtp($secret),
+            ])
             ->assertOk();
 
         $this->assertNull($user->fresh()->two_factor_confirmed_at);
