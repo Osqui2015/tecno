@@ -110,6 +110,12 @@ Route::middleware(['auth:sanctum', 'admin', 'throttle:admin-write'])->prefix('ad
     // Estado del scraper (última / próxima ejecución)
     Route::get('/scrape-status', [\App\Http\Controllers\Admin\ScrapeStatusController::class, 'index']);
 
+    // Configuración de visibilidad del catálogo (qué proveedores/categorías
+    // se muestran en el sitio público)
+    Route::get('/catalog-settings',         [\App\Http\Controllers\Admin\CatalogSettingController::class, 'index']);
+    Route::get('/catalog-settings/stats',   [\App\Http\Controllers\Admin\CatalogSettingController::class, 'stats']);
+    Route::patch('/catalog-settings',       [\App\Http\Controllers\Admin\CatalogSettingController::class, 'update']);
+
     // Gestión de cupones (Admin CRUD)
     Route::get('/coupons',               [AdminCouponController::class, 'index']);
     Route::post('/coupons',              [AdminCouponController::class, 'store']);

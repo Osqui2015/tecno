@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Services\CatalogVisibility;
 use App\Support\CacheHelper;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +35,11 @@ class ProductController extends Controller
     {
         $query = Product::with('category')
             ->available();
+
+        // 0) Visibilidad del catálogo (configuración admin por proveedor).
+        //    Los productos de proveedores deshabilitados o de categorías no
+        //    seleccionadas no se muestran en el catálogo público.
+        CatalogVisibility::apply($query);
 
         // 1) Búsqueda por término (utiliza Scout si hay driver configurado, fallback a LIKE)
         if ($request->filled('search')) {
@@ -104,6 +111,9 @@ class ProductController extends Controller
                 $brandsQuery = Product::available()
                     ->whereNotNull('brand')
                     ->where('brand', '!=', '');
+
+                // Mismo filtro de visibilidad que el listado.
+                CatalogVisibility::apply($brandsQuery);
 
                 if ($request->filled('category_id')) {
                     $brandsQuery->inCategory($request->integer('category_id'));
@@ -177,7 +187,10 @@ class ProductController extends Controller
             "products:show:{$id}",
             ['products:public'],
             self::CACHE_TTL_SECONDS,
-            fn () => Product::with('category')->active()->findOrFail($id)
+            fn () => Product::with('category')
+                ->active()
+                ->tap(fn (Builder $q) => CatalogVisibility::apply($q))
+                ->findOrFail($id)
         );
 
         return response()->json($product);
@@ -211,6 +224,9 @@ class ProductController extends Controller
                     ->active()
                     ->where('id', '!=', $id)
                     ->where('stock', '>', 0);
+
+                // Los relacionados también respetan la visibilidad del catálogo.
+                CatalogVisibility::apply($query);
 
                 if ($product && $product->category_id) {
                     $query->where('category_id', $product->category_id);
