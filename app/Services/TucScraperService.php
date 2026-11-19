@@ -25,10 +25,11 @@ class TucScraperService extends BaseWoodmartScraper
 {
     protected function configure(): void
     {
-        $this->baseUrl  = 'https://www.tustecnologiastuc.com';
-        $this->origin   = 'tuc';
-        $this->referer  = 'https://www.tustecnologiastuc.com/';
-        $this->shopPath = '/tienda/';
+        $this->baseUrl     = 'https://www.tustecnologiastuc.com';
+        $this->origin      = 'tuc';
+        $this->referer     = 'https://www.tustecnologiastuc.com/';
+        $this->shopPath    = '/tienda/';
+        $this->defaultAtts = [];
     }
 
 

@@ -84,16 +84,15 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
         $requestUrl = $this->buildRequestUrl($url);
 
         $response = Http::withHeaders($this->getHeaders())
-            ->withOptions([
-                'allow_redirects' => true,
-                'timeout' => 30,
-                'connect_timeout' => 10,
-            ] + CaBundleResolver::curlOptions())
+            ->withOptions($this->getHttpOptions(30))
             ->get($requestUrl);
 
         if (! $response->successful()) {
+            $snippet = trim(preg_replace('/\s+/', ' ', strip_tags($response->body())));
+            $snippet = mb_substr($snippet, 0, 150);
+            $extra = $snippet !== '' ? " — Detalle: {$snippet}" : '';
             throw new RuntimeException(
-                "HTTP {$response->status()} al solicitar {$requestUrl}"
+                "HTTP {$response->status()} al solicitar {$requestUrl}{$extra}"
             );
         }
 
@@ -148,7 +147,7 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
     /**
      * Construye la URL del AJAX de WooCommerce con todos los parámetros atts[...].
      */
-    private function buildRequestUrl(string $pageUrl): string
+    protected function buildRequestUrl(string $pageUrl): string
     {
         if (str_contains($pageUrl, 'woo_ajax=1')) {
             return $pageUrl;
@@ -159,7 +158,9 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
             $params["atts[{$key}]"] = $value;
         }
 
-        return $pageUrl . '?' . http_build_query($params);
+        $separator = str_contains($pageUrl, '?') ? '&' : '?';
+
+        return $pageUrl . $separator . http_build_query($params);
     }
 
     /**
@@ -173,12 +174,18 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
         return [
             'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' .
                 'AppleWebKit/537.36 (KHTML, like Gecko) ' .
-                'Chrome/120.0.0.0 Safari/537.36',
-            'Accept'          => 'application/json, text/html, */*',
+                'Chrome/124.0.0.0 Safari/537.36',
+            'Accept'          => 'application/json, text/javascript, text/html, */*; q=0.01',
             'Accept-Language' => 'es-AR,es;q=0.9,en;q=0.8',
             'Accept-Encoding' => 'gzip, deflate',
             'X-Requested-With' => 'XMLHttpRequest',
-            'Referer'         => $this->referer,
+            'Referer'         => $this->referer ?: ($this->baseUrl . '/'),
+            'Sec-Ch-Ua'       => '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            'Sec-Ch-Ua-Mobile' => '?0',
+            'Sec-Ch-Ua-Platform' => '"Windows"',
+            'Sec-Fetch-Dest'  => 'empty',
+            'Sec-Fetch-Mode'  => 'cors',
+            'Sec-Fetch-Site'  => 'same-origin',
         ];
     }
 

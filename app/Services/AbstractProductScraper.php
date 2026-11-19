@@ -167,21 +167,45 @@ abstract class AbstractProductScraper
     // ============================================================
 
     /**
+     * Opciones para peticiones HTTP (timeouts, CA bundle y proxy si está configurado).
+     *
+     * @return array<string, mixed>
+     */
+    protected function getHttpOptions(int $timeout = 30): array
+    {
+        $options = [
+            'allow_redirects' => true,
+            'timeout'         => $timeout,
+            'connect_timeout' => 10,
+        ] + CaBundleResolver::curlOptions();
+
+        $proxy = config("services.scraper.{$this->origin}_proxy")
+            ?: config('services.scraper.proxy')
+            ?: env(strtoupper($this->origin) . '_SCRAPER_PROXY')
+            ?: env('SCRAPER_PROXY');
+
+        if (! empty($proxy)) {
+            $options['proxy'] = $proxy;
+        }
+
+        return $options;
+    }
+
+    /**
      * Hace GET a una URL con headers "humanos" y devuelve el body.
      * Las subclases lo usan en fetchPage().
      */
     protected function httpGet(string $url, int $timeout = 30): string
     {
         $response = Http::withHeaders($this->getHeaders())
-            ->withOptions([
-                'allow_redirects' => true,
-                'timeout' => $timeout,
-                'connect_timeout' => 10,
-            ] + CaBundleResolver::curlOptions())
+            ->withOptions($this->getHttpOptions($timeout))
             ->get($url);
 
         if (! $response->successful()) {
-            throw new RuntimeException("HTTP {$response->status()} al solicitar {$url}");
+            $snippet = trim(preg_replace('/\s+/', ' ', strip_tags($response->body())));
+            $snippet = mb_substr($snippet, 0, 150);
+            $extra = $snippet !== '' ? " — Detalle: {$snippet}" : '';
+            throw new RuntimeException("HTTP {$response->status()} al solicitar {$url}{$extra}");
         }
 
         return $response->body();
@@ -192,7 +216,7 @@ abstract class AbstractProductScraper
         return [
             'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' .
                 'AppleWebKit/537.36 (KHTML, like Gecko) ' .
-                'Chrome/120.0.0.0 Safari/537.36',
+                'Chrome/124.0.0.0 Safari/537.36',
             'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Language' => 'es-AR,es;q=0.9,en;q=0.8',
             // OJO: NO pedimos `br` (Brotli) porque el cURL de Laragon
@@ -200,7 +224,13 @@ abstract class AbstractProductScraper
             // content encoding type". El server entonces nos manda gzip
             // o deflate, que sí entendemos.
             'Accept-Encoding' => 'gzip, deflate',
-            'Referer'         => $this->referer ?: $this->baseUrl . '/',
+            'Referer'         => $this->referer ?: ($this->baseUrl . '/'),
+            'Sec-Ch-Ua'       => '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+            'Sec-Ch-Ua-Mobile' => '?0',
+            'Sec-Ch-Ua-Platform' => '"Windows"',
+            'Sec-Fetch-Dest'  => 'document',
+            'Sec-Fetch-Mode'  => 'navigate',
+            'Sec-Fetch-Site'  => 'none',
         ];
     }
 

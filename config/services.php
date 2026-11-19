@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Scrapers
+    |--------------------------------------------------------------------------
+    |
+    | Proxy opcional para los scrapers (por si el proveedor bloquea la IP).
+    | Se puede definir uno global con SCRAPER_PROXY o uno por proveedor con
+    | DAZ_SCRAPER_PROXY / TUC_SCRAPER_PROXY / TERO_SCRAPER_PROXY.
+    |
+    | Formato: http://usuario:clave@host:puerto
+    |
+    */
+
+    'scraper' => [
+        'proxy' => env('SCRAPER_PROXY'),
+        'daz'   => env('DAZ_SCRAPER_PROXY'),
+        'tuc'   => env('TUC_SCRAPER_PROXY'),
+        'tero'  => env('TERO_SCRAPER_PROXY'),
+    ],
+
 ];
