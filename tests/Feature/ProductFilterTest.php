@@ -49,4 +49,46 @@ class ProductFilterTest extends TestCase
             ->assertJsonPath('data.0.name', 'Caro')
             ->assertJsonPath('data.1.name', 'Barato');
     }
+
+    #[Test]
+    public function can_sort_products_by_featured_prioritizing_christmas_products(): void
+    {
+        $catNavidad = \App\Models\Category::factory()->create(['name' => 'Navidad']);
+        $catGeneral = \App\Models\Category::factory()->create(['name' => 'Ferretería']);
+
+        Product::factory()->create([
+            'name'        => 'Adaptador de Enchufe',
+            'category_id' => $catGeneral->id,
+            'stock'       => 1000,
+            'image'       => 'https://example.com/plug.jpg',
+            'active'      => true,
+            'external_id' => 'GEN1',
+        ]);
+
+        Product::factory()->create([
+            'name'        => 'Luces Navideñas 100L',
+            'category_id' => $catNavidad->id,
+            'stock'       => 50,
+            'image'       => 'https://example.com/luces.jpg',
+            'active'      => true,
+            'external_id' => 'NAV1',
+        ]);
+
+        Product::factory()->create([
+            'name'        => 'Árbol de Navidad 120cm',
+            'category_id' => $catNavidad->id,
+            'stock'       => 20,
+            'image'       => 'https://example.com/arbol.jpg',
+            'active'      => true,
+            'external_id' => 'NAV2',
+        ]);
+
+        $response = $this->getJson('/api/products?sort_by=featured');
+
+        $response->assertOk();
+        // El árbol de navidad va primero (hero), luego las luces navideñas, y luego el adaptador
+        $this->assertEquals('Árbol de Navidad 120cm', $response->json('data.0.name'));
+        $this->assertEquals('Luces Navideñas 100L', $response->json('data.1.name'));
+        $this->assertEquals('Adaptador de Enchufe', $response->json('data.2.name'));
+    }
 }

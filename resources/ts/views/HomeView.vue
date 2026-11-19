@@ -22,7 +22,7 @@ async function loadHomeSections() {
     loadingRecent.value = true;
     try {
         const [featuredRes, recentRes] = await Promise.all([
-            axios.get('/products', { params: { per_page: 5, sort_by: 'featured' } }),
+            axios.get('/products', { params: { per_page: 10, sort_by: 'featured' } }),
             axios.get('/products', { params: { per_page: 10, sort_by: 'newest' } }),
         ]);
         featuredProducts.value = featuredRes.data?.data || [];
@@ -45,12 +45,19 @@ onMounted(() => {
     }
 });
 
-// Destacados: productos con mayor stock / destacados por el backend
-const bestSellers = computed(() =>
-    featuredProducts.value.length > 0
-        ? featuredProducts.value
-        : store.products.filter((p) => p.stock > 0).slice(0, 5)
-);
+// Destacados: productos navideños y destacados por el backend
+const bestSellers = computed(() => {
+    if (featuredProducts.value.length > 0) {
+        return featuredProducts.value;
+    }
+    const christmas = store.products.filter(
+        (p) => p.stock > 0 && (p.category_id === 74 || p.name.toLowerCase().includes('navid'))
+    );
+    if (christmas.length > 0) {
+        return christmas.slice(0, 10);
+    }
+    return store.products.filter((p) => p.stock > 0).slice(0, 10);
+});
 
 // "Recientes": últimos productos ingresados al catálogo
 const topArticles = computed(() =>
@@ -134,7 +141,15 @@ function clearMoreFilters() {
 }
 
 // Highlighted hero product for the media block on the right of the Hero (sketch layout)
-const heroProduct = computed(() => featuredProducts.value[0] || store.products.find(p => p.stock > 0) || store.products[0]);
+const heroProduct = computed(() => {
+    if (featuredProducts.value.length > 0) {
+        return featuredProducts.value[0];
+    }
+    const christmas = store.products.find(
+        (p) => p.stock > 0 && p.image && (p.name.toLowerCase().includes('arbol') || p.category_id === 74 || p.name.toLowerCase().includes('navid'))
+    );
+    return christmas || store.products.find((p) => p.stock > 0) || store.products[0];
+});
 
 // Categories formatted for sketch grid
 const categoriesWithCount = computed(() => {
@@ -165,6 +180,7 @@ const categoryProducts = computed(() => {
 
 function getMaterialIcon(name: string): string {
     const n = name.toLowerCase();
+    if (n.includes('navid') || n.includes('fiesta') || n.includes('arbol')) return 'celebration';
     if (n.includes('auric') || n.includes('audi') || n.includes('soni')) return 'headphones';
     if (n.includes('celu') || n.includes('movil') || n.includes('tel') || n.includes('smart')) return 'smartphone';
     if (n.includes('comp') || n.includes('notebook') || n.includes('pc') || n.includes('tec')) return 'devices';
@@ -186,6 +202,9 @@ function getCategoryDescription(cat: { name: string; description?: string | null
     );
     
     if (!cat.description || hasDaz) {
+        if (name.includes('navid') || name.includes('navideñ')) {
+            return 'Árboles, luces, adornos y decoración navideña.';
+        }
         if (name.includes('audio') || name.includes('auricular') || name.includes('sonido')) {
             return 'Auriculares, parlantes y sonido de alta fidelidad.';
         }
@@ -287,7 +306,7 @@ const formatPrice = formatCurrency;
                         <div class="absolute bottom-4 left-4 right-4 bg-[#0b1c30]/80 backdrop-blur-md p-4 rounded-xl border border-white/10">
                             <div class="flex justify-between items-end gap-2">
                                 <div class="min-w-0">
-                                    <p class="text-[9px] font-bold text-brand-300 uppercase tracking-wider mb-0.5">Producto Destacado</p>
+                                    <p class="text-[9px] font-bold text-brand-300 uppercase tracking-wider mb-0.5">Producto Destacado • Especial Navidad 🎄</p>
                                     <p class="text-sm font-bold text-white line-clamp-1">{{ heroProduct.name }}</p>
                                 </div>
                                 <div class="text-right flex-shrink-0">
@@ -321,13 +340,18 @@ const formatPrice = formatCurrency;
         <section class="animate-slide-up">
             <div class="flex items-end justify-between mb-6">
                 <div>
-                    <h2 class="section-title">Productos Destacados</h2>
+                    <div class="flex items-center gap-2">
+                        <h2 class="section-title">Productos Destacados</h2>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                            🎄 Especial Navidad
+                        </span>
+                    </div>
                     <p class="text-xs text-slate-400 mt-2.5 max-w-md">
-                        Nuestra selección premium con la mejor calidad y precios exclusivos.
+                        Nuestra selección especial de Navidad con la mejor calidad y precios exclusivos.
                     </p>
                 </div>
                 <router-link
-                    :to="{ name: 'products' }"
+                    :to="{ name: 'products-by-category', params: { slug: 'navidad' } }"
                     class="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700"
                 >
                     <span>Ver todos</span>

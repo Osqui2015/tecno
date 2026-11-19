@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Product;
 use App\Services\CatalogVisibility;
 use App\Support\CacheHelper;
@@ -99,7 +100,7 @@ class ProductController extends Controller
         // 5) Ordenamiento
         $sortBy = $request->query('sort_by', 'name_asc');
         match ($sortBy) {
-            'featured'   => $query->orderByDesc('stock')->orderByDesc('created_at'),
+            'featured'   => $this->applyFeaturedOrder($query),
             'price_asc'  => $query->orderBy('price', 'asc'),
             'price_desc' => $query->orderBy('price', 'desc'),
             'newest'     => $query->orderBy('created_at', 'desc'),
@@ -179,6 +180,49 @@ class ProductController extends Controller
         ];
 
         return 'products:public:' . md5(json_encode($params));
+    }
+
+    /**
+     * Aplica el orden de productos destacados, priorizando productos navideños
+     * con imagen disponible y stock, seguido del resto por stock.
+     */
+    protected function applyFeaturedOrder(Builder $query): Builder
+    {
+        $navidadCatId = (int) (Category::where('name', 'like', '%navidad%')->value('id') ?? 74);
+
+        return $query->orderByRaw("
+            CASE
+                WHEN (
+                    category_id = {$navidadCatId}
+                    OR categories_external LIKE '%Navidad%'
+                    OR name LIKE '%navid%'
+                    OR name LIKE '%NAVID%'
+                    OR name LIKE '%Navid%'
+                    OR name LIKE '%papa noel%'
+                    OR name LIKE '%PAPA NOEL%'
+                    OR name LIKE '%arbol%'
+                    OR name LIKE '%árbol%'
+                    OR name LIKE '%Árbol%'
+                    OR name LIKE '%ARBOL%'
+                )
+                AND name NOT LIKE '%camara%'
+                AND name NOT LIKE '%CAMARA%'
+                AND image IS NOT NULL
+                AND image != '' THEN
+                    CASE
+                        WHEN (
+                            name LIKE '%arbol%'
+                            OR name LIKE '%árbol%'
+                            OR name LIKE '%Árbol%'
+                            OR name LIKE '%ARBOL%'
+                        ) THEN 2
+                        ELSE 1
+                    END
+                ELSE 0
+            END DESC
+        ")
+        ->orderByDesc('stock')
+        ->orderByDesc('created_at');
     }
 
     /**
