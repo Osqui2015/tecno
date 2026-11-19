@@ -51,70 +51,97 @@
 
 /* ===========================================================
    BASE
+   ===========================================================
+   ⚠️ Este bloque va DENTRO de @layer base a propósito.
+
+   En CSS, las reglas SIN layer (unlayered) tienen PRIORIDAD sobre
+   cualquier `@layer`, sin importar la especificidad. Si `color` estuviera
+   fuera de un layer, la regla `html, body { color: #1f2937 }` le ganaba
+   a las utilidades de Tailwind (`.text-white`, `.text-slate-700`, etc.)
+   que viven en `@layer utilities`.
+
+   Como el preflight de Tailwind pone `a { color: inherit }`, los <a>
+   heredaban el color del body y quedaban con texto oscuro sobre fondos
+   oscuros (menú superior invisible en modo claro).
+
+   Dentro de @layer base, las utilidades de Tailwind vuelven a ganar.
    =========================================================== */
-html, body {
-    margin: 0;
-    padding: 0;
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    /* Color de letra base en light: gris oscuro NEUTRO (sin tinte azul de slate-).
-       Antes era #0b1c30 que se percibía muy azulado. */
-    color: #1f2937;
-    background: #f8f9ff;
-    transition: background-color 0.3s ease, color 0.3s ease;
+@layer base {
+    html, body {
+        margin: 0;
+        padding: 0;
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        /* Color de letra base en light: gris oscuro NEUTRO (sin tinte azul de slate-).
+           Antes era #0b1c30 que se percibía muy azulado. */
+        color: #1f2937;
+        background: #f8f9ff;
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
 }
 
-html.dark body {
-    color: #f1f5f9;
-    background: #090d16;
-    background-image:
-        radial-gradient(at 0% 0%, rgba(93, 71, 226, 0.12) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(30, 27, 75, 0.2) 0px, transparent 50%);
+@layer base {
+    html.dark body {
+        color: #f1f5f9;
+        background: #090d16;
+        background-image:
+            radial-gradient(at 0% 0%, rgba(93, 71, 226, 0.12) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(30, 27, 75, 0.2) 0px, transparent 50%);
+    }
 }
 
-html.dark .card {
-    background-color: #111827;
-    border-color: #1f2937;
-    color: #f1f5f9;
+@layer base {
+    html.dark .card {
+        background-color: #111827;
+        border-color: #1f2937;
+        color: #f1f5f9;
+    }
+
+    html.dark .input {
+        background-color: #1f2937;
+        border-color: #374151;
+        color: #f9fafb;
+    }
+
+    html.dark .btn-secondary {
+        background-color: #1f2937;
+        border-color: #374151;
+        color: #f3f4f6;
+    }
+
+    html.dark .btn-secondary:hover:not(:disabled) {
+        background-color: #374151;
+        border-color: #4b5563;
+    }
 }
 
-html.dark .input {
-    background-color: #1f2937;
-    border-color: #374151;
-    color: #f9fafb;
-}
+/* ⚠️ Estos resets van DENTRO de @layer base a propósito.
+   Si `a { color: inherit }` queda sin layer, le gana a las utilidades
+   de Tailwind (`.text-white`, `.text-slate-*`) porque las reglas sin
+   layer tienen prioridad sobre @layer utilities. Eso hacía que los
+   enlaces del navbar se vieran oscuros sobre el fondo azul marino. */
+@layer base {
+    *, *::before, *::after {
+        box-sizing: border-box;
+    }
 
-html.dark .btn-secondary {
-    background-color: #1f2937;
-    border-color: #374151;
-    color: #f3f4f6;
-}
+    button {
+        cursor: pointer;
+        background: transparent;
+        border: 0;
+        font: inherit;
+    }
 
-html.dark .btn-secondary:hover:not(:disabled) {
-    background-color: #374151;
-    border-color: #4b5563;
-}
+    button:disabled {
+        cursor: not-allowed;
+    }
 
-*, *::before, *::after {
-    box-sizing: border-box;
-}
-
-button {
-    cursor: pointer;
-    background: transparent;
-    border: 0;
-    font: inherit;
-}
-
-button:disabled {
-    cursor: not-allowed;
-}
-
-a {
-    text-decoration: none;
-    color: inherit;
+    a {
+        text-decoration: none;
+        color: inherit;
+    }
 }
 
 /* ===========================================================
