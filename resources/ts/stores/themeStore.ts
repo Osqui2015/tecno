@@ -4,7 +4,10 @@ import { ref } from 'vue';
 export type Theme = 'light' | 'dark' | 'system';
 
 export const useThemeStore = defineStore('theme', () => {
-    const theme = ref<Theme>('system');
+    // Por defecto el sitio arranca en modo CLARO, sin importar el tema
+    // del sistema operativo. Si el usuario elige oscuro manualmente, se
+    // respeta (queda guardado en localStorage).
+    const theme = ref<Theme>('light');
     const isDark = ref(false);
 
     function applyTheme() {
@@ -43,11 +46,9 @@ export const useThemeStore = defineStore('theme', () => {
 
     function initTheme() {
         const saved = localStorage.getItem('theme_preference') as Theme | null;
-        if (saved && ['light', 'dark', 'system'].includes(saved)) {
-            theme.value = saved;
-        } else {
-            theme.value = 'system';
-        }
+        // Solo 'dark' se respeta como elección explícita. Cualquier otro
+        // valor (inexistente o el viejo 'system') cae en modo claro.
+        theme.value = saved === 'dark' ? 'dark' : 'light';
         applyTheme();
     }
 

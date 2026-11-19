@@ -7,11 +7,13 @@
     <meta name="api-url" content="{{ url('/api') }}">
 
     {{-- Script inline anti-FOUC para sincronizar dark mode antes del primer render --}}
+    {{-- Por defecto el sitio arranca en modo CLARO (no sigue al sistema).
+         Solo se respeta 'dark' si el usuario lo eligió explícitamente. --}}
     <script>
         (function() {
             try {
-                var theme = localStorage.getItem('theme_preference') || 'system';
-                var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                var theme = localStorage.getItem('theme_preference');
+                var isDark = theme === 'dark';
                 if (isDark) document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
             } catch (e) {}
