@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Endpoints PÚBLICOS del catálogo.
@@ -41,12 +42,23 @@ class ProductController extends Controller
         //    seleccionadas no se muestran en el catálogo público.
         CatalogVisibility::apply($query);
 
-        // 1) Búsqueda por término (utiliza Scout si hay driver configurado, fallback a LIKE)
+        // 1) Búsqueda por término (utiliza Scout si hay driver configurado con soporte de acentos, fallback a LIKE)
         if ($request->filled('search')) {
-            $searchTerm = $request->string('search')->toString();
+            $searchTerm = trim($request->string('search')->toString());
+            $normalized = Str::ascii($searchTerm);
+
             if (config('scout.driver')) {
                 $scoutIds = Product::search($searchTerm)->keys()->all();
-                $query->whereIn('id', $scoutIds);
+                if ($normalized !== $searchTerm) {
+                    $normIds = Product::search($normalized)->keys()->all();
+                    $scoutIds = array_values(array_unique(array_merge($scoutIds, $normIds)));
+                }
+
+                if (! empty($scoutIds)) {
+                    $query->whereIn('id', $scoutIds);
+                } else {
+                    $query->search($searchTerm);
+                }
             } else {
                 $query->search($searchTerm);
             }
@@ -155,7 +167,7 @@ class ProductController extends Controller
     private function buildCacheKey(Request $request, int $perPage, string $sortBy): string
     {
         $params = [
-            'search'      => $request->string('search')->toString(),
+            'search'      => trim($request->string('search')->toString()),
             'category_id' => $request->integer('category_id'),
             'brand'       => $request->string('brand')->toString(),
             'source'      => $request->string('source')->toString() ?: $request->string('origin')->toString(),

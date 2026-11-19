@@ -291,10 +291,13 @@ class Product extends Model
      */
     public function toSearchableArray(): array
     {
+        $asciiName = Str::ascii($this->name ?? '');
+        $asciiDesc = Str::ascii($this->description ?? '');
+
         return [
             'id'          => (int) $this->id,
-            'name'        => $this->name,
-            'description' => $this->description,
+            'name'        => trim($this->name . ' ' . $asciiName),
+            'description' => trim(($this->description ?? '') . ' ' . $asciiDesc),
             'brand'       => $this->brand,
             'sku'         => $this->sku,
             'category_id' => (int) $this->category_id,
@@ -368,12 +371,60 @@ class Product extends Model
         });
     }
 
+    /**
+     * Genera variantes con y sin tildes de una palabra para búsquedas insensibles a acentos
+     * independientemente del motor de base de datos (MySQL o SQLite).
+     *
+     * @return array<string>
+     */
+    public static function getAccentVariants(string $word): array
+    {
+        $ascii = Str::ascii($word);
+        $variants = [$word, $ascii, mb_strtolower($word), mb_strtolower($ascii)];
+
+        $vowelMap = [
+            'a' => 'á',
+            'e' => 'é',
+            'i' => 'í',
+            'o' => 'ó',
+            'u' => 'ú',
+        ];
+
+        $len = mb_strlen($ascii);
+        // Para cada vocal en la versión ASCII, generar la variante con tilde en esa posición
+        for ($i = 0; $i < $len; $i++) {
+            $char = mb_substr($ascii, $i, 1);
+            $lowerChar = mb_strtolower($char);
+            if (isset($vowelMap[$lowerChar])) {
+                $accented = $char === $lowerChar ? $vowelMap[$lowerChar] : mb_strtoupper($vowelMap[$lowerChar]);
+                $variants[] = mb_substr($ascii, 0, $i) . $accented . mb_substr($ascii, $i + 1);
+            }
+        }
+
+        return array_values(array_unique(array_filter($variants)));
+    }
+
     public function scopeSearch(Builder $query, string $term): Builder
     {
-        return $query->where(function ($q) use ($term) {
-            $q->where('name', 'like', "%{$term}%")
-              ->orWhere('description', 'like', "%{$term}%")
-              ->orWhere('sku', 'like', "%{$term}%");
+        $term = trim($term);
+        if ($term === '') {
+            return $query;
+        }
+
+        $words = preg_split('/\s+/', $term, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return $query->where(function (Builder $q) use ($words) {
+            foreach ($words as $word) {
+                $variants = self::getAccentVariants($word);
+                $q->where(function (Builder $wordQuery) use ($variants) {
+                    foreach ($variants as $variant) {
+                        $wordQuery->orWhere('name', 'like', "%{$variant}%")
+                            ->orWhere('description', 'like', "%{$variant}%")
+                            ->orWhere('sku', 'like', "%{$variant}%")
+                            ->orWhere('brand', 'like', "%{$variant}%");
+                    }
+                });
+            }
         });
     }
 

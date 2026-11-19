@@ -56,4 +56,63 @@ class ScoutSearchTest extends TestCase
         $response->assertOk();
         $this->assertEquals(1, $response->json('total'));
     }
+
+    #[Test]
+    public function search_finds_products_regardless_of_accents_and_case(): void
+    {
+        Product::factory()->create([
+            'name'   => 'TRIPODE PARA PARLANTE 60 120 CM',
+            'active' => true,
+            'stock'  => 10,
+        ]);
+
+        Product::factory()->create([
+            'name'   => 'Cargador Portátil Rápido',
+            'active' => true,
+            'stock'  => 10,
+        ]);
+
+        // 1. Búsqueda con tilde cuando el producto no tiene tilde
+        $resAccent = $this->getJson('/api/products?search=tr%C3%ADpode'); // trípode
+        $resAccent->assertOk();
+        $this->assertEquals(1, $resAccent->json('total'));
+        $this->assertEquals('TRIPODE PARA PARLANTE 60 120 CM', $resAccent->json('data.0.name'));
+
+        // 2. Búsqueda en minúsculas sin tilde
+        $resLower = $this->getJson('/api/products?search=tripode');
+        $resLower->assertOk();
+        $this->assertEquals(1, $resLower->json('total'));
+
+        // 3. Búsqueda en mayúsculas con tilde
+        $resUpper = $this->getJson('/api/products?search=TR%C3%8DPODE'); // TRÍPODE
+        $resUpper->assertOk();
+        $this->assertEquals(1, $resUpper->json('total'));
+
+        // 4. Búsqueda sin tilde cuando el producto sí tiene tilde
+        $resNoAccent = $this->getJson('/api/products?search=portatil');
+        $resNoAccent->assertOk();
+        $this->assertEquals(1, $resNoAccent->json('total'));
+        $this->assertEquals('Cargador Portátil Rápido', $resNoAccent->json('data.0.name'));
+    }
+
+    #[Test]
+    public function search_finds_products_with_multi_words_in_any_order(): void
+    {
+        Product::factory()->create([
+            'name'   => 'TRIPODE PARA PARLANTE 60 120 CM',
+            'active' => true,
+            'stock'  => 10,
+        ]);
+
+        // Palabras en orden invertido respecto al nombre
+        $response = $this->getJson('/api/products?search=parlante+tripode');
+        $response->assertOk();
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals('TRIPODE PARA PARLANTE 60 120 CM', $response->json('data.0.name'));
+
+        // Palabras en orden invertido y con tildes
+        $responseAccent = $this->getJson('/api/products?search=parlante+tr%C3%ADpode');
+        $responseAccent->assertOk();
+        $this->assertEquals(1, $responseAccent->json('total'));
+    }
 }

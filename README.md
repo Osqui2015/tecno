@@ -15,7 +15,7 @@ El sitio web funciona como un catálogo interactivo de cara al comprador y un ge
    - Autenticación segura de dos factores (2FA).
 
 2. **Panel Administrativo (Control de Proveedores)**:
-   - **Scrapers Automáticos**: Importación y actualización en tiempo real desde proveedores externos (**Dazimportadora** y **TusTecnología**) usando comandos de consola (`php artisan daz:scrape` y `php artisan tuc:scrape`).
+   - **Scrapers & Sincronización Automática**: Importación y actualización en tiempo real desde proveedores externos (**Dazimportadora** y **TusTecnología**) usando comandos de consola (`daz:scrape`, `tuc:localimport`, `tuc:import`).
    - **Aumento Global (Markup)**: Herramienta masiva para actualizar el porcentaje de ganancia sobre el precio base de los proveedores por origen o categoría.
    - **Gestión de Pedidos & WhatsApp**: Sistema inteligente de confirmación de stock con generación de plantillas de mensajes personalizadas listas para enviar por WhatsApp al cliente.
 
@@ -116,39 +116,71 @@ php artisan daz:scrape --fresh
 php artisan daz:scrape --category=hogar
 ```
 
-### 🔹 Flujo Automatizado Local — `tuc:localimport` (Todo en Uno)
+### 🔹 Sincronización de TusTecnología (`tuc:localimport` y `tuc:import`)
 
-Ejecuta el scraper de Playwright localmente y, al terminar, **importa automáticamente** el JSON generado a tu base de datos local en un solo comando:
+Debido a que **Cloudflare bloquea las IPs de servidores de hosting compartido** (Hostinger), la sincronización se realiza mediante una arquitectura desacoplada:
+
+```
+[ PC Local ]                              [ Servidor Hostinger ]
+Chromium + Playwright ──► productos.json ──► storage/app/ ──► php artisan tuc:import ──► MySQL
+```
+
+#### 1. En tu PC Local: Comando Todo en Uno (`tuc:localimport`)
+
+Ejecuta el scraper de Playwright con tu navegador real (eludiendo Cloudflare con tu IP residencial) y, al finalizar la extracción, **importa automáticamente** el catálogo a tu base de datos MySQL local:
 
 ```bash
-# Extracción completa de todo el catálogo (~2200 productos) e importación directa:
+# 🚀 Extracción completa de todo el catálogo (~2200 productos) e importación directa:
 php artisan tuc:localimport
 
-# Prueba rápida con 5 productos:
+# 🧪 Prueba rápida: solo extrae 5 productos y los importa para verificar:
 php artisan tuc:localimport --test
 
-# Simular sin guardar en la DB:
+# 🔬 Simulación: extrae los datos pero NO persiste cambios en la base de datos:
 php artisan tuc:localimport --dry-run
 
-# Solo extraer el JSON sin importar a la DB:
+# 📄 Solo generar productos.json sin importar a la DB:
 php artisan tuc:localimport --no-import
 ```
 
-### 🔹 Importador de TusTecnología en Servidor — `tuc:import` (Hostinger)
+#### 2. En Servidor de Producción: Importador JSON (`tuc:import`)
 
-En el servidor de producción (Hostinger), una vez subido el archivo `productos.json` a `storage/app/productos.json`:
+Una vez generado `productos.json` en tu PC, subilo a Hostinger en la ruta `storage/app/productos.json` y ejecutá:
 
 ```bash
-# Importar el JSON y sincronizar la base de datos en producción:
+# Sincroniza e impacta los productos en la base de datos en ~2 segundos:
 php artisan tuc:import
 
-# Simular importación sin persistir:
+# Simular importación sin persistir cambios:
 php artisan tuc:import --dry-run
+
+# Importar desde una ruta o archivo personalizado:
+php artisan tuc:import --file=storage/app/productos.json
 ```
 
-### 🔹 Scraper directo de TusTecnología — `tuc:scrape`
+*Características de la importación:*
+- **Actualización inteligente**: Si el producto ya existe (`external_id`), actualiza su precio, imagen, nombre y stock. Si no existe, lo crea.
+- **Protección contra falsos faltantes**: **Nunca borra ni oculta** productos si no aparecen en el JSON.
+- **Categorías automáticas**: Crea y asocia las categorías de TusTecnología en la tabla `categories`.
+- **Rendimiento**: Ejecución en transacciones por lotes MySQL (menos de 3 segundos para 2200 productos).
 
-Scrapea productos directamente desde `tustecnologiastuc.com` usando Playwright Chromium (o HTTP con cookies `TUC_CF_COOKIE`):
+#### 3. Uso manual de la herramienta independiente (`tuc-scraper/`)
+
+Si preferís ejecutar únicamente el scraper desde la terminal de Node.js:
+
+```bash
+cd tuc-scraper
+
+# Prueba rápida (5 productos -> productos_test.json)
+node scraper.js --test
+
+# Extracción completa (~2200 productos -> productos.json)
+node scraper.js
+```
+
+#### 4. Scraper directo — `tuc:scrape` (Legacy / Fallback)
+
+Scrapea directamente desde la web utilizando Playwright Chromium o cookies configuradas en `.env` (`TUC_CF_COOKIE`):
 
 ```bash
 # Probar conexión (Página 1)
