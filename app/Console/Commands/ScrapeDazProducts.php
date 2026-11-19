@@ -218,7 +218,19 @@ class ScrapeDazProducts extends Command
         $missingIds = array_diff($existingExternalIds, $foundIds);
         $hidden = 0;
 
-        if ($hideMissing && $maxPages === null && ! empty($missingIds)) {
+        // ⚠️ GUARDIA CRÍTICA: si el scraping falló (errores de red/TLS/403) o
+        // no se extrajo nada, NO se puede interpretar la ausencia de un
+        // producto como "ya no existe en el origen". Hacerlo vaciaría el
+        // catálogo entero (active=0, stock=0) por un fallo transitorio.
+        if (! empty($errors) && $maxPages === null) {
+            $this->newLine();
+            $this->error('🚨 El scraping tuvo errores: NO se ocultaron productos faltantes.');
+            $this->line('   Si un producto no aparece, puede ser un fallo de red y no que ya no exista.');
+            $this->line('   Revisá los errores del reporte y volvé a ejecutar cuando se resuelvan.');
+        } elseif (empty($allProducts)) {
+            $this->newLine();
+            $this->error('🚨 No se extrajo ningún producto: NO se ocultaron productos faltantes.');
+        } elseif ($hideMissing && $maxPages === null && ! empty($missingIds)) {
             $this->newLine();
             $this->info('🔍 Detectando productos que no aparecieron en el scraping...');
             $hidden = Product::whereIn('external_id', $missingIds)
