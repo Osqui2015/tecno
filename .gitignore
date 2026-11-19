@@ -30,3 +30,5 @@ Thumbs.db
 # HTMLs descargados para análisis de scrapers
 /storage/app/_debug/
 /storage/app/scrape-debug/
+# CA bundle descargado para los scrapers (se regenera solo)
+/storage/app/certificates/

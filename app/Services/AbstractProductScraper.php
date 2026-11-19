@@ -177,7 +177,7 @@ abstract class AbstractProductScraper
                 'allow_redirects' => true,
                 'timeout' => $timeout,
                 'connect_timeout' => 10,
-            ])
+            ] + CaBundleResolver::curlOptions())
             ->get($url);
 
         if (! $response->successful()) {

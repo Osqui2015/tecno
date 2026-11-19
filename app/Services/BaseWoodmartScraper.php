@@ -88,7 +88,7 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
                 'allow_redirects' => true,
                 'timeout' => 30,
                 'connect_timeout' => 10,
-            ])
+            ] + CaBundleResolver::curlOptions())
             ->get($requestUrl);
 
         if (! $response->successful()) {
