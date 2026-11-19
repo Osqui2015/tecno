@@ -201,6 +201,57 @@ a {
 .btn-md { padding: 0.625rem 1.25rem; font-size: 0.875rem; }
 .btn-lg { padding: 0.75rem 1.625rem; font-size: 0.95rem; }
 
+/* ---------- Switch (toggle ON/OFF) ---------- */
+.switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    background-color: #cbd5e1;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+.switch:focus-visible {
+    outline: 2px solid var(--color-brand-600, #703bf7);
+    outline-offset: 2px;
+}
+
+.switch[aria-checked='true'] {
+    background-color: #10b981;
+}
+
+.switch[aria-checked='false'] {
+    background-color: #cbd5e1;
+}
+
+.dark .switch[aria-checked='false'] {
+    background-color: #475569;
+}
+
+.switch-knob {
+    display: block;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 9999px;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+    transform: translateX(0.1875rem);
+    transition: transform 0.2s ease;
+}
+
+.switch[aria-checked='true'] .switch-knob {
+    transform: translateX(1.3125rem);
+}
+
+.switch:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* ---------- Inputs ---------- */
 .input {
     width: 100%;

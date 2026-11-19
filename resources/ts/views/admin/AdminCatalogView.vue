@@ -22,10 +22,20 @@ interface OriginSetting {
     product_count: number;
 }
 
+interface OriginStats {
+    origin: string;
+    label: string;
+    total: number;
+    available: number;
+    visible: number;
+    hidden: number;
+}
+
 const admin = useAdminStore();
 
 const settings = ref<OriginSetting[]>([]);
 const categories = ref<Category[]>([]);
+const stats = ref<OriginStats[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const categorySearch = ref<Record<string, string>>({});
@@ -49,6 +59,18 @@ const form = reactive<Record<string, {
 
 const categorySelectorOpen = reactive<Record<string, boolean>>({});
 
+/**
+ * Activa/desactiva la visibilidad de un proveedor.
+ *
+ * Al ocultar un proveedor, sus productos salen del catálogo público pero
+ * NO se borran: siguen guardados y vuelven a aparecer si lo reactivás.
+ */
+function toggleOrigin(origin: string) {
+    const entry = form[origin];
+    if (!entry) return;
+    entry.enabled = !entry.enabled;
+}
+
 async function load() {
     loading.value = true;
     try {
@@ -65,6 +87,14 @@ async function load() {
                 category_ids: [...(s.category_ids ?? [])],
                 sort_order: s.sort_order,
             };
+        }
+
+        // Estadísticas de visibilidad (cuántos productos quedan visibles).
+        try {
+            const { data: statsData } = await axios.get('/admin/catalog-settings/stats');
+            stats.value = statsData.stats ?? [];
+        } catch {
+            stats.value = [];
         }
     } catch (err: any) {
         admin.flashError('No se pudo cargar la configuración del catálogo');
@@ -144,6 +174,36 @@ const hasChanges = computed(() => {
     return false;
 });
 
+/**
+ * Cuántos productos de un proveedor quedarían visibles con la configuración
+ * actual (incluye cambios sin guardar).
+ *
+ * Si el proveedor está oculto → 0.
+ * Si está en modo "todas las categorías" → todos los disponibles.
+ * Si filtra por categoría → los que están en las categorías elegidas
+ * (calculado por el servidor con la configuración guardada; al cambiar
+ * las categorías sin guardar se muestra el dato guardado).
+ */
+function visibleCount(origin: string): number {
+    const entry = form[origin];
+    if (!entry) return 0;
+    if (!entry.enabled) return 0;
+
+    const stat = stats.value.find(s => s.origin === origin);
+    if (!stat) return 0;
+
+    // Sin filtro por categoría: se ve todo lo activo del proveedor.
+    if (!entry.filter_by_category) return stat.available;
+
+    // Con filtro por categoría: el server ya calculó el exacto.
+    return stat.visible;
+}
+
+/** Total de productos visibles en todo el catálogo con la config actual. */
+const totalVisible = computed(() => {
+    return settings.value.reduce((acc, s) => acc + visibleCount(s.origin), 0);
+});
+
 async function save() {
     saving.value = true;
     try {
@@ -197,6 +257,30 @@ onMounted(() => {
         </div>
 
         <template v-else>
+            <!-- Resumen -->
+            <div class="card p-4">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center">
+                            <SvgIcon name="eye" size="1rem" />
+                        </span>
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                                Productos en el catálogo público
+                            </p>
+                            <p class="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                                {{ totalVisible }}
+                                <span class="text-xs font-semibold text-slate-400">productos visibles</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div v-if="hasChanges" class="flex items-center gap-2">
+                        <span class="chip chip-warning text-[10px]">Cambios sin guardar</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tarjeta por proveedor -->
             <div
                 v-for="s in settings"
@@ -218,25 +302,43 @@ onMounted(() => {
                         <div>
                             <h3 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">{{ s.label }}</h3>
                             <p class="text-[11px] text-slate-500">
-                                {{ s.product_count }} productos · {{ s.origin }}
+                                <template v-if="form[s.origin]?.enabled">
+                                    <span class="font-bold text-emerald-600 dark:text-emerald-400">
+                                        {{ visibleCount(s.origin) }} visibles
+                                    </span>
+                                    <span> de {{ s.product_count }} productos</span>
+                                </template>
+                                <template v-else>
+                                    <span class="font-bold text-slate-400">{{ s.product_count }} productos</span>
+                                    <span> · {{ s.origin }}</span>
+                                </template>
                             </p>
                         </div>
                     </div>
 
-                    <!-- Toggle mostrar/ocultar -->
+                    <!-- Switch mostrar/ocultar -->
                     <div class="flex items-center gap-3">
-                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                            {{ form[s.origin]?.enabled ? 'Visible en el sitio' : 'Oculto' }}
-                        </span>
+                        <div class="text-right">
+                            <p
+                                class="text-xs font-extrabold"
+                                :class="form[s.origin]?.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'"
+                            >
+                                {{ form[s.origin]?.enabled ? 'VISIBLE' : 'OCULTO' }}
+                            </p>
+                            <p class="text-[10px] text-slate-400">
+                                {{ form[s.origin]?.enabled ? 'Se muestra en el sitio' : 'No aparece en el sitio' }}
+                            </p>
+                        </div>
                         <button
                             type="button"
-                            @click="form[s.origin].enabled = !form[s.origin].enabled"
-                            :class="form[s.origin].enabled
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
-                                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'"
-                            class="px-2.5 py-1 text-xs font-semibold rounded-full transition-colors"
+                            role="switch"
+                            :aria-checked="form[s.origin]?.enabled ? 'true' : 'false'"
+                            :aria-label="`Mostrar productos de ${s.label}`"
+                            :disabled="saving"
+                            @click="toggleOrigin(s.origin)"
+                            class="switch"
                         >
-                            {{ form[s.origin].enabled ? 'Visible' : 'Oculto' }}
+                            <span class="switch-knob"></span>
                         </button>
                     </div>
                 </div>
@@ -337,14 +439,18 @@ onMounted(() => {
                 <!-- Estado oculto -->
                 <div v-else class="px-5 py-4">
                     <p class="text-xs text-slate-500 dark:text-slate-400">
-                        Este proveedor está oculto del catálogo público.
-                        Sus {{ s.product_count }} productos siguen guardados y se reactivan al volver a mostrarlo.
+                        Los {{ s.product_count }} productos de <strong>{{ s.label }}</strong> están ocultos del
+                        catálogo público. Siguen guardados en la base de datos: no se borran ni se desactiva
+                        el stock. Volvé a activar el switch para mostrarlos de nuevo.
                     </p>
                 </div>
             </div>
 
             <!-- Guardar -->
-            <div class="flex justify-end gap-3">
+            <div class="flex flex-wrap justify-end gap-3">
+                <span v-if="hasChanges" class="self-center text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                    Tenés cambios sin guardar
+                </span>
                 <button
                     type="button"
                     :disabled="saving || !hasChanges"

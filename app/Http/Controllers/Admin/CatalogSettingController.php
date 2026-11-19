@@ -114,6 +114,13 @@ class CatalogSettingController extends Controller
         foreach ($settings as $origin => $setting) {
             $total = $this->countForOrigin($origin);
 
+            // Productos activos del proveedor, sin filtro de categoría.
+            $available = \App\Models\Product::query()
+                ->where('origin', $origin)
+                ->available()
+                ->count();
+
+            // Productos visibles con la configuración guardada (con filtro).
             $visible = \App\Models\Product::query()
                 ->where('origin', $origin)
                 ->available()
@@ -123,11 +130,12 @@ class CatalogSettingController extends Controller
                 ->count();
 
             $rows[] = [
-                'origin'  => $origin,
-                'label'   => CatalogSetting::originLabels()[$origin] ?? $origin,
-                'total'   => $total,
-                'visible' => $visible,
-                'hidden'  => max(0, $total - $visible),
+                'origin'    => $origin,
+                'label'     => CatalogSetting::originLabels()[$origin] ?? $origin,
+                'total'     => $total,
+                'available' => $available,
+                'visible'   => $visible,
+                'hidden'    => max(0, $total - $visible),
             ];
         }
 
