@@ -196,7 +196,7 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
     /**
      * Parsea el HTML de la respuesta AJAX y extrae las cards de producto.
      */
-    private function parseProductsFromHtml(string $html): array
+    protected function parseProductsFromHtml(string $html): array
     {
         if (trim($html) === '') {
             return [];
@@ -260,7 +260,7 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
 
         $image    = $this->extractImage($xpath, $node);
         $gtmJson  = $this->extractGtmData($xpath, $node);
-        $sku      = is_array($gtmJson) ? ($gtmJson['sku'] ?? null) : null;
+        $sku      = $this->extractSku($xpath, $node, $gtmJson);
         $stock    = $this->extractStock($xpath, $node, $gtmJson);
         $prices   = $this->extractPrices($xpath, $node, $gtmJson);
         $cats     = $this->extractCategories($xpath, $node);
@@ -377,6 +377,37 @@ abstract class BaseWoodmartScraper extends AbstractProductScraper
 
         $decoded = json_decode(html_entity_decode($raw), true);
         return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Extrae el SKU del producto:
+     *  1) gtm4wp_productdata (JSON embebido)
+     *  2) data-product_sku del botón de añadir al carrito
+     *  3) Elemento con clase .sku
+     */
+    protected function extractSku(DOMXPath $xpath, DOMNode $node, ?array $gtmJson): ?string
+    {
+        if (is_array($gtmJson) && ! empty($gtmJson['sku'])) {
+            return (string) $gtmJson['sku'];
+        }
+
+        $btn = $this->firstOf($xpath, './/a[contains(@class, "add_to_cart_button") and @data-product_sku]', $node);
+        if ($btn instanceof DOMElement) {
+            $sku = trim($btn->getAttribute('data-product_sku'));
+            if ($sku !== '') {
+                return $sku;
+            }
+        }
+
+        $skuNode = $this->firstOf($xpath, './/*[contains(@class, "sku")]', $node);
+        if ($skuNode instanceof DOMElement) {
+            $sku = $this->cleanText($skuNode->textContent);
+            if ($sku !== null && $sku !== '') {
+                return $sku;
+            }
+        }
+
+        return null;
     }
 
     /**

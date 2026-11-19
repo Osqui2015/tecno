@@ -36,6 +36,7 @@ class ScrapeTucProducts extends Command
         {--category=       : Filtrar productos por nombre de categoría externa}
         {--no-hide-missing : NO ocultar productos que no aparezcan en el scraping}
         {--detail          : Después del listado, scrapear la página de detalle de cada producto}
+        {--test            : Modo prueba: solo consulta página 1 y muestra diagnóstico sin guardar}
         {--queue           : Despachar el scrape como Job en background (no bloquea la consola)}';
 
     protected $description = 'Scrapea productos desde tustecnologiastuc.com y los guarda/actualiza en la DB';
@@ -79,6 +80,62 @@ class ScrapeTucProducts extends Command
         $this->info('║      TUSTECNOLOGÍATUC — SCRAPER         ║');
         $this->info('╚══════════════════════════════════════════╝');
         $this->newLine();
+
+        if ($this->option('test')) {
+            $this->info('🧪 MODO TEST: Consultando únicamente la Página 1 de admin-ajax.php...');
+            $startTime = microtime(true);
+            try {
+                $result = $this->scraper->fetchPage('1');
+            } catch (\Throwable $e) {
+                $this->error('❌ Error consultando admin-ajax.php: ' . $e->getMessage());
+                return self::FAILURE;
+            }
+            $products = $result['products'] ?? [];
+            $duration = round(microtime(true) - $startTime, 2);
+
+            $this->info("⏱️  Tiempo de respuesta: {$duration}s");
+            $this->info("📦 Cantidad de productos encontrados: " . count($products));
+
+            if (empty($products)) {
+                $this->warn('⚠️  No se encontraron productos en la página 1.');
+                return self::SUCCESS;
+            }
+
+            $first = $products[0];
+            $last = end($products);
+
+            $this->newLine();
+            $this->info('─── PRIMER PRODUCTO ───');
+            $this->line("• ID Externo:   " . ($first['external_id'] ?? '-'));
+            $this->line("• Nombre:       " . ($first['name'] ?? '-'));
+            $this->line("• Precio:       $" . number_format((float)($first['price'] ?? 0), 2));
+            if (! empty($first['list_price']) && $first['list_price'] != $first['price']) {
+                $this->line("• Precio Ant.:  $" . number_format((float)$first['list_price'], 2));
+            }
+            $this->line("• URL:          " . ($first['source_url'] ?? '-'));
+            $this->line("• SKU:          " . ($first['sku'] ?? '(sin SKU)'));
+            $this->line("• Stock:        " . ($first['stock'] !== null ? $first['stock'] : '(no especificado)'));
+            $this->line("• Categorías:   " . implode(', ', $first['categories_external'] ?? []));
+            $this->line("• Imagen:       " . ($first['image'] ?? '(sin imagen)'));
+
+            $this->newLine();
+            $this->info('─── ÚLTIMO PRODUCTO ───');
+            $this->line("• ID Externo:   " . ($last['external_id'] ?? '-'));
+            $this->line("• Nombre:       " . ($last['name'] ?? '-'));
+            $this->line("• Precio:       $" . number_format((float)($last['price'] ?? 0), 2));
+            if (! empty($last['list_price']) && $last['list_price'] != $last['price']) {
+                $this->line("• Precio Ant.:  $" . number_format((float)$last['list_price'], 2));
+            }
+            $this->line("• URL:          " . ($last['source_url'] ?? '-'));
+            $this->line("• SKU:          " . ($last['sku'] ?? '(sin SKU)'));
+            $this->line("• Stock:        " . ($last['stock'] !== null ? $last['stock'] : '(no especificado)'));
+            $this->line("• Categorías:   " . implode(', ', $last['categories_external'] ?? []));
+            $this->line("• Imagen:       " . ($last['image'] ?? '(sin imagen)'));
+
+            $this->newLine();
+            $this->info('✅ Prueba completada con éxito. El endpoint respondió correctamente y los datos se parsearon.');
+            return self::SUCCESS;
+        }
 
         $maxPages = $this->option('pages') !== null && $this->option('pages') !== ''
             ? (int) $this->option('pages')

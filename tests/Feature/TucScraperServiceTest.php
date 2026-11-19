@@ -227,4 +227,65 @@ HTML;
         $scraper = new TucScraperService();
         $scraper->fetchPage('https://www.tustecnologiastuc.com/productos/');
     }
+
+    #[Test]
+    public function it_sends_post_with_required_admin_ajax_payload(): void
+    {
+        Http::fake([
+            'www.tustecnologiastuc.com/wp-admin/admin-ajax.php' => Http::response([
+                'items' => self::TUC_PRODUCT_HTML,
+                'status' => 'have-posts',
+            ], 200),
+        ]);
+
+        $scraper = new TucScraperService();
+        $result = $scraper->fetchPage('1');
+
+        $this->assertCount(1, $result['products']);
+        $this->assertSame('2', $result['nextPage']);
+
+        Http::assertSent(function (\Illuminate\Http\Client\Request $request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'admin-ajax.php')
+                && ($request['action'] ?? null) === 'woodmart_get_products_shortcode'
+                && ($request['woo_ajax'] ?? null) == 1
+                && ($request['paged'] ?? null) == 1
+                && isset($request['atts']['items_per_page'])
+                && $request['atts']['items_per_page'] == 70;
+        });
+    }
+
+    #[Test]
+    public function it_stops_pagination_when_no_more_posts(): void
+    {
+        Http::fake([
+            'www.tustecnologiastuc.com/wp-admin/admin-ajax.php' => Http::response([
+                'items' => '',
+                'status' => 'no-more-posts',
+            ], 200),
+        ]);
+
+        $scraper = new TucScraperService();
+        $result = $scraper->fetchPage('33');
+
+        $this->assertEmpty($result['products']);
+        $this->assertNull($result['nextPage']);
+    }
+
+    #[Test]
+    public function it_runs_test_command_without_saving(): void
+    {
+        Http::fake([
+            'www.tustecnologiastuc.com/wp-admin/admin-ajax.php' => Http::response([
+                'items' => self::TUC_PRODUCT_HTML,
+                'status' => 'have-posts',
+            ], 200),
+        ]);
+
+        $this->artisan('tuc:scrape', ['--test' => true])
+            ->expectsOutputToContain('MODO TEST')
+            ->expectsOutputToContain('Cantidad de productos encontrados')
+            ->expectsOutputToContain('PRIMER PRODUCTO')
+            ->assertExitCode(0);
+    }
 }
