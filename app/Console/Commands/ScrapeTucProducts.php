@@ -82,7 +82,7 @@ class ScrapeTucProducts extends Command
         $this->newLine();
 
         if ($this->option('test')) {
-            $this->info('🧪 MODO TEST: Consultando únicamente la Página 1 de admin-ajax.php...');
+            $this->info('🧪 MODO TEST: Consultando Página 1 de admin-ajax.php...');
             $startTime = microtime(true);
             try {
                 $result = $this->scraper->fetchPage('1');
@@ -92,8 +92,12 @@ class ScrapeTucProducts extends Command
             }
             $products = $result['products'] ?? [];
             $duration = round(microtime(true) - $startTime, 2);
+            $httpCode = $result['http_code'] ?? 200;
+            $driver = $result['driver'] ?? 'playwright';
 
-            $this->info("⏱️  Tiempo de respuesta: {$duration}s");
+            $this->info("🌐 HTTP Status: {$httpCode} OK");
+            $this->info("🤖 Driver:      " . ($driver === 'playwright' ? 'Playwright (Chromium real con bypass Cloudflare)' : 'HTTP Directo (con cookies)'));
+            $this->info("⏱️  Tiempo:      {$duration}s");
             $this->info("📦 Cantidad de productos encontrados: " . count($products));
 
             if (empty($products)) {
@@ -106,34 +110,34 @@ class ScrapeTucProducts extends Command
 
             $this->newLine();
             $this->info('─── PRIMER PRODUCTO ───');
-            $this->line("• ID Externo:   " . ($first['external_id'] ?? '-'));
             $this->line("• Nombre:       " . ($first['name'] ?? '-'));
             $this->line("• Precio:       $" . number_format((float)($first['price'] ?? 0), 2));
             if (! empty($first['list_price']) && $first['list_price'] != $first['price']) {
                 $this->line("• Precio Ant.:  $" . number_format((float)$first['list_price'], 2));
             }
+            $this->line("• Imagen:       " . ($first['image'] ?? '(sin imagen)'));
             $this->line("• URL:          " . ($first['source_url'] ?? '-'));
+            $this->line("• ID Externo:   " . ($first['external_id'] ?? '-'));
             $this->line("• SKU:          " . ($first['sku'] ?? '(sin SKU)'));
             $this->line("• Stock:        " . ($first['stock'] !== null ? $first['stock'] : '(no especificado)'));
             $this->line("• Categorías:   " . implode(', ', $first['categories_external'] ?? []));
-            $this->line("• Imagen:       " . ($first['image'] ?? '(sin imagen)'));
 
             $this->newLine();
             $this->info('─── ÚLTIMO PRODUCTO ───');
-            $this->line("• ID Externo:   " . ($last['external_id'] ?? '-'));
             $this->line("• Nombre:       " . ($last['name'] ?? '-'));
             $this->line("• Precio:       $" . number_format((float)($last['price'] ?? 0), 2));
             if (! empty($last['list_price']) && $last['list_price'] != $last['price']) {
                 $this->line("• Precio Ant.:  $" . number_format((float)$last['list_price'], 2));
             }
+            $this->line("• Imagen:       " . ($last['image'] ?? '(sin imagen)'));
             $this->line("• URL:          " . ($last['source_url'] ?? '-'));
+            $this->line("• ID Externo:   " . ($last['external_id'] ?? '-'));
             $this->line("• SKU:          " . ($last['sku'] ?? '(sin SKU)'));
             $this->line("• Stock:        " . ($last['stock'] !== null ? $last['stock'] : '(no especificado)'));
             $this->line("• Categorías:   " . implode(', ', $last['categories_external'] ?? []));
-            $this->line("• Imagen:       " . ($last['image'] ?? '(sin imagen)'));
 
             $this->newLine();
-            $this->info('✅ Prueba completada con éxito. El endpoint respondió correctamente y los datos se parsearon.');
+            $this->info('✅ Prueba completada con éxito. El navegador real obtuvo las cookies y parseó la respuesta.');
             return self::SUCCESS;
         }
 

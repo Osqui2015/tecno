@@ -116,12 +116,45 @@ php artisan daz:scrape --fresh
 php artisan daz:scrape --category=hogar
 ```
 
-### 🔹 Scraper de TusTecnología — `tuc:scrape`
+### 🔹 Flujo Automatizado Local — `tuc:localimport` (Todo en Uno)
 
-Scrapea productos desde `tustecnologiastuc.com` y los guarda/actualiza en la base de datos.
+Ejecuta el scraper de Playwright localmente y, al terminar, **importa automáticamente** el JSON generado a tu base de datos local en un solo comando:
 
 ```bash
-# Scrapea todas las páginas (delay 1s entre requests)
+# Extracción completa de todo el catálogo (~2200 productos) e importación directa:
+php artisan tuc:localimport
+
+# Prueba rápida con 5 productos:
+php artisan tuc:localimport --test
+
+# Simular sin guardar en la DB:
+php artisan tuc:localimport --dry-run
+
+# Solo extraer el JSON sin importar a la DB:
+php artisan tuc:localimport --no-import
+```
+
+### 🔹 Importador de TusTecnología en Servidor — `tuc:import` (Hostinger)
+
+En el servidor de producción (Hostinger), una vez subido el archivo `productos.json` a `storage/app/productos.json`:
+
+```bash
+# Importar el JSON y sincronizar la base de datos en producción:
+php artisan tuc:import
+
+# Simular importación sin persistir:
+php artisan tuc:import --dry-run
+```
+
+### 🔹 Scraper directo de TusTecnología — `tuc:scrape`
+
+Scrapea productos directamente desde `tustecnologiastuc.com` usando Playwright Chromium (o HTTP con cookies `TUC_CF_COOKIE`):
+
+```bash
+# Probar conexión (Página 1)
+php artisan tuc:scrape --test
+
+# Scrapea todas las páginas
 php artisan tuc:scrape
 
 # Solo las primeras N páginas

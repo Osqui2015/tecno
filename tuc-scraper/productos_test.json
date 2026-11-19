@@ -1,0 +1,84 @@
+[
+  {
+    "external_id": "310364",
+    "nombre": "MESA DE MADERA PORTATIL PARA NOTEBOOK OFERTA (CON DETALLE)",
+    "descripcion": "",
+    "precio": "9000",
+    "precio_anterior": "",
+    "imagen_url": "https://www.tustecnologiastuc.com/wp-content/uploads/WhatsApp-Image-2026-11-18-at-4.43.11-PM.jpeg",
+    "url_producto": "https://www.tustecnologiastuc.com/product/mesa-de-madera-portatil-para-notebook-oferta-con-detalle/",
+    "categoria": "Bazar",
+    "categorias": [
+      "Bazar",
+      "Hogar"
+    ],
+    "sku": "",
+    "stock": "16"
+  },
+  {
+    "external_id": "310348",
+    "nombre": "BATERIA MODELOS VARIOS",
+    "descripcion": "",
+    "precio": "3000",
+    "precio_anterior": "",
+    "imagen_url": "https://www.tustecnologiastuc.com/wp-content/uploads/WhatsApp-Image-2026-11-18-at-3.54.12-PM.jpeg",
+    "url_producto": "https://www.tustecnologiastuc.com/product/bateria-modelos-varios/",
+    "categoria": "Celulares",
+    "categorias": [
+      "Celulares",
+      "Tecnologia"
+    ],
+    "sku": "",
+    "stock": "60"
+  },
+  {
+    "external_id": "107982",
+    "nombre": "cargador auto dinax 3.1 v8",
+    "descripcion": "",
+    "precio": "1366.83",
+    "precio_anterior": "",
+    "imagen_url": "https://www.tustecnologiastuc.com/wp-content/uploads/WhatsApp-Image-2026-11-18-at-1.27.34-PM.jpeg",
+    "url_producto": "https://www.tustecnologiastuc.com/product/cargador-auto-dinax-3-1-tipo-c/",
+    "categoria": "Accesorios De Celular",
+    "categorias": [
+      "Accesorios De Celular",
+      "Accesorios Para Vehiculos"
+    ],
+    "sku": "",
+    "stock": "1"
+  },
+  {
+    "external_id": "132527",
+    "nombre": "cable plug a plug mixor para vos auxiliar",
+    "descripcion": "",
+    "precio": "656.03",
+    "precio_anterior": "",
+    "imagen_url": "https://www.tustecnologiastuc.com/wp-content/uploads/WhatsApp-Image-2023-10-09-at-9.50.06-AM.jpeg",
+    "url_producto": "https://www.tustecnologiastuc.com/product/cable-plug-a-plug-mixor-para-vos-auxiliar/",
+    "categoria": "Accesorios De Audio",
+    "categorias": [
+      "Accesorios De Audio",
+      "Ferreteria",
+      "Herramientas"
+    ],
+    "sku": "",
+    "stock": "1"
+  },
+  {
+    "external_id": "80940",
+    "nombre": "CARGADOR MIXOR 12V AUTO USB ALIVIO",
+    "descripcion": "",
+    "precio": "1473.27",
+    "precio_anterior": "",
+    "imagen_url": "https://www.tustecnologiastuc.com/wp-content/uploads/WhatsApp-Image-2022-07-25-at-3.16.38-PM-2.jpeg",
+    "url_producto": "https://www.tustecnologiastuc.com/product/cargador-mixor-12v-auto-usb-alivio/",
+    "categoria": "Accesorios De Celular",
+    "categorias": [
+      "Accesorios De Celular",
+      "Accesorios Para Vehiculos",
+      "Cargadores"
+    ],
+    "sku": "",
+    "stock": "1"
+  }
+]
